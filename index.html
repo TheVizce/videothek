@@ -217,6 +217,12 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:4px 0}
 .chrow .chname{font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .chrow summary .hint{text-align:right;max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .chbody{padding:4px 12px 12px;display:flex;flex-direction:column;gap:12px;border-top:1px solid var(--line);padding-top:12px}
+.optrow{display:flex;align-items:center;gap:2px}
+.optrow .opt{flex:1;min-width:0}
+.star{border:0;background:none;padding:3px 6px;border-radius:4px;color:var(--muted);font-size:15px;line-height:1}
+.star:hover{background:var(--sunk);color:var(--ink)}
+.star.on,.favmark{color:#e8a317}
+.chrow summary .star{margin:-3px 0}
 .follow{display:inline-flex;align-items:center;gap:6px;margin-top:6px}
 @media (max-width:820px){
   .main{grid-template-columns:minmax(0,1fr)}
@@ -902,6 +908,7 @@ function feedVisible({skipCh}={}){
     if(!F.showHidden&&S.feedHidden[it.id]) return false;
     if(!skipCh&&F.ch.size&&!F.ch.has(it.channelId)) return false;
     if(F.show==="new"&&!(Date.parse(it.published)>F.seenPrev)) return false;
+    if(F.show==="fav"&&!S.channels.get(it.channelId)?.fav) return false;
     if(F.show==="notin"&&S.videos.has(it.id)) return false;
     if(S.q){ const hay=(it.title+" "+it.channelTitle).toLowerCase(); for(const w of S.q.toLowerCase().split(/\s+/).filter(Boolean)) if(!hay.includes(w)) return false; }
     return true;
@@ -959,21 +966,21 @@ function renderFeedRail(){
   const r=$("#rail");
   if(!S.channels.size){ r.innerHTML=`<p class="hint">Hier erscheinen deine Kanäle, sobald du welche hinzugefügt hast.</p><button class="btn" data-channels>Kanäle verwalten</button>`; return; }
   const counts=new Map(); for(const it of feedVisible({skipCh:true})) counts.set(it.channelId,(counts.get(it.channelId)||0)+1);
-  let chans=[...S.channels.values()].sort((a,b)=>(counts.get(b.id)||0)-(counts.get(a.id)||0)||a.title.localeCompare(b.title,"de"));
+  let chans=[...S.channels.values()].sort((a,b)=>(b.fav?1:0)-(a.fav?1:0)||(counts.get(b.id)||0)-(counts.get(a.id)||0)||a.title.localeCompare(b.title,"de"));
   if(F.chQ) chans=chans.filter(c=>c.title.toLowerCase().includes(F.chQ.toLowerCase()));
   r.innerHTML=`<div class="facet"><h3>Anzeigen</h3><div class="opts">
-      ${[["all","Alle Videos"],["new","Nur neue seit letztem Besuch"],["notin","Noch nicht in der Videothek"]].map(([k,l])=>`<button class="opt ${F.show===k?"on":""}" data-fshow="${k}"><span>${l}</span></button>`).join("")}</div>
+      ${[["all","Alle Videos"],["fav","★ Nur Favoriten"],["new","Nur neue seit letztem Besuch"],["notin","Noch nicht in der Videothek"]].map(([k,l])=>`<button class="opt ${F.show===k?"on":""}" data-fshow="${k}"><span>${l}</span></button>`).join("")}</div>
       <label class="check" style="padding:6px 8px 0"><input type="checkbox" id="feedHiddenToggle" ${F.showHidden?"checked":""}> Ausgeblendete zeigen</label></div>
     <div class="facet"><h3>Kanäle${F.ch.size?`<button data-fchclear>zurücksetzen</button>`:""}</h3>
       ${S.channels.size>8?`<input class="small-in" id="chQ" placeholder="Kanal suchen" value="${esc(F.chQ)}">`:""}
-      <div class="opts">${chans.map(c=>`<button class="opt ${F.ch.has(c.id)?"on":""}" data-fch="${c.id}" title="${esc(chRuleSummary(c))}"><span>${esc(c.title)}${chRuleSummary(c)?' <span class="hint">⚑</span>':""}</span><span class="n">${counts.get(c.id)||0}</span></button>`).join("")||'<span class="hint">Keine Treffer</span>'}</div></div>
+      <div class="opts">${chans.map((c,i)=>`${i>0&&chans[i-1].fav&&!c.fav?'<hr class="sep" style="margin:4px 8px">':""}<div class="optrow"><button class="opt ${F.ch.has(c.id)?"on":""}" data-fch="${c.id}" title="${esc(chRuleSummary(c))}"><span>${esc(c.title)}${chRuleSummary(c)?' <span class="hint">⚑</span>':""}</span><span class="n">${counts.get(c.id)||0}</span></button>${starBtn(c)}</div>`).join("")||'<span class="hint">Keine Treffer</span>'}</div></div>
     <button class="btn" data-channels>Kanäle & Regeln verwalten</button>`;
   const q=$("#chQ"); if(q&&F._focus){ q.focus(); q.setSelectionRange(q.value.length,q.value.length); }
 }
 function renderFeedActive(){
   const list=feedVisible(); const chips=[];
   for(const id of F.ch){ const c=S.channels.get(id); if(c) chips.push(`<span class="chip">${esc(c.title)}<button data-fch="${id}" aria-label="Filter entfernen">✕</button></span>`); }
-  if(F.show!=="all") chips.push(`<span class="chip">${F.show==="new"?"Nur neue":"Nicht in Videothek"}<button data-fshow="all" aria-label="Filter entfernen">✕</button></span>`);
+  if(F.show!=="all") chips.push(`<span class="chip">${{new:"Nur neue",notin:"Nicht in Videothek",fav:"★ Favoriten"}[F.show]}<button data-fshow="all" aria-label="Filter entfernen">✕</button></span>`);
   $("#active").innerHTML=`<span class="hint mono">${plur(list.length,"Video","Videos")}</span>${chips.join("")}`;
 }
 function feedCardHTML(it){
@@ -981,7 +988,7 @@ function feedCardHTML(it){
   const cv={id:it.id,title:it.title,creator:it.channelTitle,duration:it.duration};
   return `<div class="card fcard ${hidden?"gone":""}">
     <button class="fopen" data-feed="${it.id}" aria-label="${esc(it.title)}">${coverHTML(cv,{badges:false}).replace(/<\/div>\s*$/,`<div class="tl">${isNew&&!inLib?'<span class="badge rx">Neu</span>':""}${inLib?'<span class="badge">✓ in Videothek</span>':""}</div><div class="badges">${it.live==="live"?'<span class="badge rx">Live</span>':""}${it.duration?`<span class="badge">${fmtDur(it.duration)}</span>`:""}</div></div>`)}</button>
-    <div class="meta"><span class="t">${esc(it.title)}</span><span class="s">${esc(it.channelTitle)} · ${relTime(it.published)}</span></div>
+    <div class="meta"><span class="t">${esc(it.title)}</span><span class="s">${S.channels.get(it.channelId)?.fav?'<span class="favmark" title="Favorit">★</span> ':""}${esc(it.channelTitle)} · ${relTime(it.published)}</span></div>
     <div class="factions">${inLib?`<button class="btn" data-open="${it.id}">Öffnen</button>`:`<button class="btn" data-fadd="${it.id}">+ Videothek</button>`}
       <button class="btn ghost" data-fhide="${it.id}">${hidden?"Einblenden":"Ausblenden"}</button></div>
   </div>`;
@@ -1027,7 +1034,8 @@ function renderFeedDrawer(){
   const rest=`<div><h3 class="dtitle">${esc(it.title)}</h3><div class="hint" style="margin-top:4px">${esc(it.channelTitle)} · ${new Date(it.published).toLocaleDateString("de-DE")}${it.duration?` · ${fmtDur(it.duration)}`:""}</div></div>
     <div class="actions">${inLib?`<button class="btn primary" data-open="${it.id}">In der Videothek öffnen</button>`:`<button class="btn primary" data-fadd="${it.id}">+ Videothek (ungesehen)</button><button class="btn" data-faddedit="${it.id}">Übernehmen & bearbeiten</button>`}
       <button class="btn ghost" data-fhide="${it.id}">${S.feedHidden[it.id]?"Wieder einblenden":"Ausblenden"}</button>
-      <a class="btn ghost" href="${ytUrl(it.id)}" target="_blank" rel="noopener">YouTube ↗</a></div>
+      <a class="btn ghost" href="${ytUrl(it.id)}" target="_blank" rel="noopener">YouTube ↗</a>
+      ${c?`<button class="btn ghost" data-fav="${c.id}">${c.fav?"★ Favorit":"☆ Kanal als Favorit"}</button>`:""}</div>
     ${it.desc?`<p class="desc">${esc(it.desc)}${it.desc.length>=400?" …":""}</p>`:""}
     ${c&&(c.genre||(c.tags||[]).length)?`<p class="hint" style="margin:0">Beim Übernehmen bekommt das Video${c.genre?` das Genre „${esc(c.genre)}“`:""}${c.genre&&(c.tags||[]).length?" und":""}${(c.tags||[]).length?` die Tags ${esc(c.tags.join(", "))}`:""} (Einstellung des Kanals).</p>`:""}`;
   if(S.playing&&$(".player iframe")&&$(".drawer-rest")){ $(".drawer-rest").innerHTML=rest; return; }
@@ -1050,6 +1058,9 @@ async function resolveChannel(input){
   const c=j.items?.[0]; if(!c) throw {msg:"Diesen Kanal gibt es nicht. Prüf die Schreibweise des @Handles."};
   return {id:c.id,title:c.snippet?.title||c.id,handle:c.snippet?.customUrl||""};
 }
+function starBtn(c){ return `<button type="button" class="star ${c.fav?"on":""}" data-fav="${c.id}" aria-pressed="${!!c.fav}" aria-label="${c.fav?"Favorit entfernen":"Als Favorit markieren"}" title="${c.fav?"Favorit entfernen":"Als Favorit markieren"}">${c.fav?"★":"☆"}</button>`; }
+function toggleFav(id){ const c=S.channels.get(id); if(!c) return; S.channels.set(id,{...c,fav:!c.fav,updatedAt:Date.now()}); persist();
+  if($("#cm-list")) renderChannelList(); render(); toast(c.fav?`„${c.title}“ ist kein Favorit mehr`:`„${c.title}“ ist jetzt Favorit`); }
 function addChannel(c){
   const now=Date.now(); const ex=S.channels.get(c.id);
   S.channels.set(c.id,ex?{...ex,title:c.title||ex.title,updatedAt:now}:{id:c.id,title:c.title,handle:c.handle||"",include:"",exclude:"",hideShorts:false,genre:"",format:"",tags:[],addedAt:now,updatedAt:now});
@@ -1104,11 +1115,12 @@ async function cmAdd(){
 }
 function renderChannelList(){
   const box=$("#cm-list"); if(!box) return;
-  let list=[...S.channels.values()].sort((a,b)=>a.title.localeCompare(b.title,"de"));
+  const openIds=new Set([...box.querySelectorAll(".chrow[open]")].map(d=>d.id.slice(3)));
+  let list=[...S.channels.values()].sort((a,b)=>(b.fav?1:0)-(a.fav?1:0)||a.title.localeCompare(b.title,"de"));
   if(CM.q) list=list.filter(c=>c.title.toLowerCase().includes(CM.q.toLowerCase()));
   const opt=(arr,val)=>`<option value="">–</option>${[...new Set([...arr,...(val&&!arr.includes(val)?[val]:[])])].map(x=>`<option ${x===val?"selected":""}>${esc(x)}</option>`).join("")}`;
-  box.innerHTML=list.map(c=>`<details class="chrow" id="cm-${c.id}" ${CM.open===c.id?"open":""}>
-    <summary><span class="chname">${esc(c.title)}</span><span class="hint">${esc(chRuleSummary(c)||"alle Videos")}</span></summary>
+  box.innerHTML=list.map(c=>`<details class="chrow" id="cm-${c.id}" ${CM.open===c.id||openIds.has(c.id)?"open":""}>
+    <summary>${starBtn(c)}<span class="chname">${esc(c.title)}</span><span class="hint">${esc(chRuleSummary(c)||"alle Videos")}</span></summary>
     <div class="chbody" data-ch="${c.id}">
       <div class="row">
         <div class="f"><label>Nur Videos mit</label><input type="text" data-k="include" value="${esc(c.include)}" placeholder="z. B. Oilers, Edmonton"></div>
@@ -1412,6 +1424,7 @@ document.addEventListener("click",e=>{
   if(d.fhide){ feedHide(d.fhide); return; }
   if(d.fshow){ F.show=d.fshow; render(); return; }
   if(d.fch){ F.ch.has(d.fch)?F.ch.delete(d.fch):F.ch.add(d.fch); render(); return; }
+  if(d.fav){ e.preventDefault(); toggleFav(d.fav); return; }
   if(d.fchclear!==undefined){ F.ch.clear(); render(); return; }
   if(d.feedrefresh!==undefined){ refreshFeed(); return; }
   if(d.channels!==undefined){ openChannels(); return; }

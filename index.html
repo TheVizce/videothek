@@ -343,7 +343,7 @@ const S = {
   videos:new Map(), lists:structuredClone(DEFAULT_LISTS), listsUpdatedAt:0, loaded:false,
   cfg:Object.assign({owner:"",repo:"",branch:"main",path:"library.json",token:"",ytKey:""},lsGet(LS_CFG,{})),
   sha:null, dirty:false, deleted:new Set(), syncState:"", syncErr:"",
-  f:{genre:new Set(),format:new Set(),mood:new Set(),creator:new Set(),tags:new Set(),status:new Set(),watched:"all"},
+  f:{genre:new Set(),format:new Set(),mood:new Set(),creator:new Set(),tags:new Set(),status:new Set(),watched:"all",inclRx:lsGet("vt-inclrx",false)},
   q:"", sort:lsGet("vt-sort","added"), creatorQ:"", openId:null, playing:false
 };
 const $ = s=>document.querySelector(s);
@@ -388,14 +388,17 @@ function reactionsTo(id){ const out=[]; for(const v of S.videos.values()) if((v.
 function allTags(){ const m=new Map(); for(const v of S.videos.values()) for(const t of v.tags||[]) m.set(t,(m.get(t)||0)+1); return [...m].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])); }
 function allCreators(){ const m=new Map(); for(const v of S.videos.values()) if(v.creator) m.set(v.creator,(m.get(v.creator)||0)+1); return [...m].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])); }
 
+function originsOf(v){ return (v.reactsTo||[]).map(id=>S.videos.get(id)).filter(Boolean); }
+function effGenres(v){ const g=new Set(v.genre?[v.genre]:[]); if(S.f.inclRx) for(const o of originsOf(v)) if(o.genre) g.add(o.genre); return [...g]; }
+function effTags(v){ const t=new Set(v.tags||[]); if(S.f.inclRx) for(const o of originsOf(v)) for(const x of o.tags||[]) t.add(x); return [...t]; }
 function matches(v,skip){
   const f=S.f;
-  if(skip!=="genre"&&f.genre.size&&!f.genre.has(v.genre)) return false;
+  if(skip!=="genre"&&f.genre.size&&!effGenres(v).some(g=>f.genre.has(g))) return false;
   if(skip!=="format"&&f.format.size&&!f.format.has(v.format)) return false;
   if(skip!=="mood"&&f.mood.size&&!f.mood.has(v.mood)) return false;
   if(skip!=="creator"&&f.creator.size&&!f.creator.has(v.creator)) return false;
   if(skip!=="status"&&f.status.size&&!f.status.has(v.status||"Verfügbar")) return false;
-  if(skip!=="tags") for(const t of f.tags) if(!(v.tags||[]).includes(t)) return false;
+  if(skip!=="tags"&&f.tags.size){ const et=effTags(v); for(const t of f.tags) if(!et.includes(t)) return false; }
   if(skip!=="watched"){ if(f.watched==="yes"&&!v.watched) return false; if(f.watched==="no"&&v.watched) return false; }
   if(S.q){ const hay=[v.title,v.creator,v.genre,v.format,v.mood,v.notes,...(v.tags||[])].join(" ").toLowerCase();
     for(const w of S.q.toLowerCase().split(/\s+/).filter(Boolean)) if(!hay.includes(w)) return false; }
@@ -436,7 +439,7 @@ async function fetchMeta(ids){ // → Map id → {title,creator,uploadDate,durat
 /* ================= Rendern ================= */
 function render(){ renderRail(); renderActive(); renderGrid(); if(S.openId) renderDrawer(); }
 
-function facetCounts(key,getter){ const m=new Map(); for(const v of S.videos.values()){ if(!matches(v,key)) continue; const k=getter(v); if(k) m.set(k,(m.get(k)||0)+1); } return m; }
+function facetCounts(key,getter){ const m=new Map(); for(const v of S.videos.values()){ if(!matches(v,key)) continue; for(const k of [].concat(getter(v))) if(k) m.set(k,(m.get(k)||0)+1); } return m; }
 function facetBlock(title,key,values,counts){
   const set=S.f[key]; if(!values.length) return "";
   return `<div class="facet"><h3>${title}${set.size?`<button data-clear="${key}">zurücksetzen</button>`:""}</h3><div class="opts">
@@ -445,18 +448,19 @@ function facetBlock(title,key,values,counts){
 }
 function renderRail(){
   const r=$("#rail"); if(!S.videos.size){ r.innerHTML=`<p class="hint">Filter erscheinen, sobald Videos in der Bibliothek sind.</p>`; return; }
-  const gC=facetCounts("genre",v=>v.genre), fC=facetCounts("format",v=>v.format), mC=facetCounts("mood",v=>v.mood),
+  const gC=facetCounts("genre",effGenres), fC=facetCounts("format",v=>v.format), mC=facetCounts("mood",v=>v.mood),
         sC=facetCounts("status",v=>v.status||"Verfügbar"), cC=facetCounts("creator",v=>v.creator);
   const withExtra=(list,counts)=>[...new Set([...list,...counts.keys()])].filter(x=>list.includes(x)||counts.get(x));
   let creators=allCreators().map(c=>c[0]);
   if(S.creatorQ) creators=creators.filter(c=>c.toLowerCase().includes(S.creatorQ.toLowerCase()));
   const showC=[...new Set([...S.f.creator,...creators.slice(0,10)])];
-  const tagCounts=new Map(); for(const v of S.videos.values()) if(matches(v,"tags")) for(const t of v.tags||[]) tagCounts.set(t,(tagCounts.get(t)||0)+1);
+  const tagCounts=new Map(); for(const v of S.videos.values()) if(matches(v,"tags")) for(const t of effTags(v)) tagCounts.set(t,(tagCounts.get(t)||0)+1);
   const tagList=[...new Set([...S.f.tags,...allTags().map(t=>t[0]).filter(t=>tagCounts.get(t))])].slice(0,30);
   r.innerHTML=`
     <div class="facet"><h3>Gesehen</h3><div class="seg">
       ${[["all","Alle"],["no","Ungesehen"],["yes","Gesehen"]].map(([k,l])=>`<button data-w="${k}" class="${S.f.watched===k?"on":""}">${l}</button>`).join("")}
     </div></div>
+    ${[...S.videos.values()].some(v=>(v.reactsTo||[]).length)?`<label class="check" style="padding:0;align-items:flex-start" title="Reactions erscheinen auch, wenn ihr Original zum Genre- oder Tag-Filter passt"><input type="checkbox" id="inclRx" ${S.f.inclRx?"checked":""} style="margin-top:3px"><span>Reactions über Genre und Tags ihres Originals finden</span></label>`:""}
     ${facetBlock("Genre","genre",withExtra(S.lists.genres,gC),gC)}
     ${facetBlock("Format","format",withExtra(S.lists.formats,fC),fC)}
     <div class="facet"><h3>Creator${S.f.creator.size?`<button data-clear="creator">zurücksetzen</button>`:""}</h3>
@@ -640,8 +644,20 @@ function renderRx(){
       return `<div class="rxsel">${miniHTML(shown,"data-noop")}<button type="button" class="btn ghost" data-rmrx="${id}" aria-label="Verknüpfung entfernen">✕</button></div>`}).join("")||'<span class="hint">Noch kein Original verknüpft.</span>'}</div>
     <input class="small-in" id="e-rxq" placeholder="Original suchen oder dessen YouTube-URL einfügen" value="${esc(E.rxQ)}" autocomplete="off" style="margin:0">
     <div class="rxres" id="e-rxres"></div>
+    <span class="hint ok" id="e-rxmsg"></span>
   </div></div>`;
   const q=$("#e-rxq"); q.addEventListener("input",()=>{E.rxQ=q.value;renderRxRes();}); renderRxRes();
+}
+function inheritFrom(o){ // Genre (falls leer) und Tags des Originals übernehmen
+  if(!o) return "";
+  const parts=[]; const sel=$("#e-genre");
+  if(o.genre&&!sel.value){
+    if(![...sel.options].some(x=>x.value===o.genre)) sel.add(new Option(o.genre,o.genre));
+    sel.value=o.genre; parts.push(`Genre „${o.genre}“`);
+  }
+  const newTags=(o.tags||[]).filter(t=>!E.tags.includes(t)); E.tags.push(...newTags);
+  if(newTags.length) parts.push(newTags.length===1?"1 Tag":`${newTags.length} Tags`);
+  return parts.length?`${parts.join(" und ")} vom Original übernommen. Du kannst sie oben noch anpassen.`:"";
 }
 function renderRxRes(){
   const box=$("#e-rxres"); if(!box) return; const q=E.rxQ.trim(); const selfId=E.id||parseId($("#e-url").value);
@@ -812,7 +828,7 @@ document.addEventListener("click",e=>{
   if(d.delYes!==undefined){ const id=S.openId; closeLayer(); removeVideo(id); toast("Gelöscht"); return; }
   if(d.rmtag){ E.tags=E.tags.filter(x=>x!==d.rmtag); renderTags(); return; }
   if(d.addtag){ addTag(d.addtag); return; }
-  if(d.pickrx){ E.reactsTo.push(d.pickrx); E.rxQ=""; renderRx(); $("#e-rxq").focus(); return; }
+  if(d.pickrx){ E.reactsTo.push(d.pickrx); E.rxQ=""; const msg=inheritFrom(S.videos.get(d.pickrx)); renderTags(); renderRx(); if(msg) $("#e-rxmsg").textContent=msg; $("#e-rxq").focus(); return; }
   if(d.newrx){ E.stubs.set(d.newrx,{id:d.newrx,title:"",creator:"",tags:[],reactsTo:[],status:"Verfügbar",watched:false,addedAt:Date.now()}); E.reactsTo.push(d.newrx); E.rxQ=""; renderRx(); return; }
   if(d.rmrx){ E.reactsTo=E.reactsTo.filter(x=>x!==d.rmrx); renderRx(); return; }
 });
@@ -824,6 +840,7 @@ $("#filterToggle").addEventListener("click",()=>$("#rail").classList.toggle("ope
 $("#q").addEventListener("input",e=>{ S.q=e.target.value.trim(); renderActive(); renderGrid(); });
 $("#sort").value=S.sort;
 $("#sort").addEventListener("change",e=>{ S.sort=e.target.value; lsSet("vt-sort",S.sort); renderGrid(); });
+$("#rail").addEventListener("change",e=>{ if(e.target.id==="inclRx"){ S.f.inclRx=e.target.checked; lsSet("vt-inclrx",S.f.inclRx); render(); } });
 $("#rail").addEventListener("input",e=>{ if(e.target.id==="creatorQ"){ S.creatorQ=e.target.value; S._focusCreator=true; renderRail(); S._focusCreator=false; } });
 document.addEventListener("keydown",e=>{
   if(e.key==="Escape"&&$("#layer").innerHTML) closeLayer();

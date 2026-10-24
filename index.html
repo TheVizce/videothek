@@ -172,6 +172,34 @@ button.mini:hover{border-color:var(--muted)}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 20px);background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:999px;z-index:30;font-weight:500}
 hr.sep{border:0;border-top:1px solid var(--line);margin:4px 0}
 
+.tabs{display:flex;gap:2px;background:var(--sunk);padding:3px;border-radius:8px}
+.tabs button{border:0;background:none;padding:6px 14px;border-radius:6px;font-weight:600;color:var(--muted)}
+.tabs button.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.bar-left{display:flex;flex-wrap:wrap;gap:12px;align-items:center;min-width:0}
+.stack{position:relative;padding-top:9px;width:100%}
+.stack::before,.stack::after{content:"";position:absolute;top:0;height:14px;border-radius:6px 6px 0 0;background:hsl(var(--h) calc(var(--cover-s) - 10%) calc(var(--cover-l) + 22%))}
+.stack::before{left:9%;right:9%}
+.stack::after{left:4%;right:4%;top:4px;background:hsl(var(--h) calc(var(--cover-s) - 5%) calc(var(--cover-l) + 11%))}
+.stack .cover{z-index:1}
+.prog{height:4px;background:var(--sunk);border-radius:2px;overflow:hidden;margin-top:4px}
+.prog i{display:block;height:100%;background:var(--accent)}
+.prog.big{height:6px;border-radius:3px}
+.parts{display:flex;flex-direction:column;gap:6px}
+.part{display:grid;grid-template-columns:26px minmax(0,1fr) auto;gap:8px;align-items:center}
+.part .num{font-size:12px;color:var(--muted);text-align:right}
+.part.done .mini b{color:var(--muted);font-weight:500}
+.pact{display:flex;align-items:center;gap:2px}
+.pact button{border:0;background:none;padding:4px 6px;border-radius:4px;color:var(--muted);line-height:1}
+.pact button:hover:not(:disabled){background:var(--sunk);color:var(--ink)}
+.pact button:disabled{opacity:.3;cursor:default}
+.pact input{margin:0 6px}
+.seriesnav{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;border:1px solid var(--line);border-radius:var(--r);padding:8px 10px}
+.seriesnav .lk{border:0;background:none;padding:0;text-align:left;font-weight:600;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.seriesnav .lk:hover{color:var(--accent)}
+.seriesnav small{display:block;color:var(--muted);font-weight:400}
+.stat{display:flex;flex-wrap:wrap;gap:6px 14px;color:var(--muted);font-size:13px}
+.plbox{border:1px solid var(--line);border-radius:var(--r);padding:12px;background:var(--bg);display:flex;flex-direction:column;gap:8px}
+.desc{white-space:pre-wrap;margin:0;color:var(--ink);max-height:9.5em;overflow:auto}
 @media (max-width:820px){
   .main{grid-template-columns:minmax(0,1fr)}
   .rail{position:static;max-height:none;display:none;border:1px solid var(--line);border-radius:10px;padding:14px;background:var(--surface)}
@@ -205,8 +233,9 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:4px 0}
   <section>
     <div id="notice"></div>
     <div class="bar">
-      <div class="active" id="active"></div>
-      <label class="sort">Sortieren
+      <div class="bar-left"><div class="tabs" role="tablist" id="tabs"><button data-view="videos" role="tab">Videos</button><button data-view="series" role="tab">Reihen</button></div>
+      <div class="active" id="active"></div></div>
+      <label class="sort" id="sortWrap">Sortieren
         <select id="sort">
           <option value="added">Zuletzt hinzugefügt</option>
           <option value="upload">Upload-Datum</option>
@@ -278,9 +307,10 @@ function ghErr(status,what){
   return {status,msg:m||`GitHub hat mit Fehler ${status} geantwortet. Versuch es gleich noch einmal.`};
 }
 
-function snapshotData(){ return {version:1,updatedAt:Date.now(),listsUpdatedAt:S.listsUpdatedAt||0,lists:S.lists,videos:[...S.videos.values()].sort((a,b)=>(a.addedAt||0)-(b.addedAt||0))}; }
+function snapshotData(){ return {version:1,updatedAt:Date.now(),listsUpdatedAt:S.listsUpdatedAt||0,lists:S.lists,videos:[...S.videos.values()].sort((a,b)=>(a.addedAt||0)-(b.addedAt||0)),series:[...S.series.values()].sort((a,b)=>(a.addedAt||0)-(b.addedAt||0))}; }
 function applyData(d){
   S.videos=new Map((d?.videos||[]).filter(v=>v&&v.id).map(v=>[v.id,v]));
+  S.series=new Map((d?.series||[]).filter(x=>x&&x.id).map(x=>[x.id,x]));
   if(d?.lists) S.lists={genres:d.lists.genres||[],formats:d.lists.formats||[],moods:d.lists.moods||[]};
   S.listsUpdatedAt=d?.listsUpdatedAt||0;
 }
@@ -289,9 +319,13 @@ function mergeRemote(d){
   for(const v of d?.videos||[]) if(v&&v.id&&!S.deleted.has(v.id)) out.set(v.id,v);
   for(const v of S.videos.values()){ const r=out.get(v.id); if(!r||(v.updatedAt||0)>=(r.updatedAt||0)) out.set(v.id,v); }
   S.videos=out;
+  const so=new Map();
+  for(const x of d?.series||[]) if(x&&x.id&&!S.deletedSeries.has(x.id)) so.set(x.id,x);
+  for(const x of S.series.values()){ const r=so.get(x.id); if(!r||(x.updatedAt||0)>=(r.updatedAt||0)) so.set(x.id,x); }
+  S.series=so;
   if(d?.lists&&(d.listsUpdatedAt||0)>(S.listsUpdatedAt||0)){ S.lists=d.lists; S.listsUpdatedAt=d.listsUpdatedAt; }
 }
-function cacheLocal(){ lsSet(LS_CACHE,{data:snapshotData(),sha:S.sha,dirty:S.dirty,deleted:[...S.deleted],repoKey:repoKey()}); }
+function cacheLocal(){ lsSet(LS_CACHE,{data:snapshotData(),sha:S.sha,dirty:S.dirty,deleted:[...S.deleted],deletedSeries:[...S.deletedSeries],repoKey:repoKey()}); }
 const repoKey=()=>`${S.cfg.owner}/${S.cfg.repo}@${S.cfg.branch}:${S.cfg.path}`;
 
 let pushTimer=null, pushing=false;
@@ -302,7 +336,7 @@ async function push(){
   pushing=true; S.syncState="busy"; setSync();
   try{
     for(let attempt=0;attempt<3;attempt++){
-      try{ S.sha=await GH.write(snapshotData(),S.sha); S.dirty=false; S.deleted.clear(); S.syncState="ok"; S.syncErr=""; break; }
+      try{ S.sha=await GH.write(snapshotData(),S.sha); S.dirty=false; S.deleted.clear(); S.deletedSeries.clear(); S.syncState="ok"; S.syncErr=""; break; }
       catch(e){ if(!e.conflict||attempt===2) throw e; const remote=await GH.read(); S.sha=remote.sha; mergeRemote(remote.data); render(); }
     }
   }catch(e){ S.syncState="err"; S.syncErr=e.msg||"Speichern auf GitHub fehlgeschlagen. Prüf deine Verbindung."; }
@@ -314,7 +348,7 @@ async function pull({quiet}={}){
   try{
     const remote=await GH.read();
     if(S.dirty){ mergeRemote(remote.data); S.sha=remote.sha; persist(); }
-    else if(remote.sha!==S.sha||!quiet){ if(remote.data) applyData(remote.data); else { S.videos=new Map(); } S.sha=remote.sha; }
+    else if(remote.sha!==S.sha||!quiet){ if(remote.data) applyData(remote.data); else { S.videos=new Map(); S.series=new Map(); } S.sha=remote.sha; }
     S.syncState=S.dirty?"busy":"ok"; S.syncErr="";
     if(!remote.sha&&!S.dirty){ S.syncState="ok"; }
     cacheLocal();
@@ -340,11 +374,11 @@ function showNotice(){
 
 /* ================= Zustand & Helfer ================= */
 const S = {
-  videos:new Map(), lists:structuredClone(DEFAULT_LISTS), listsUpdatedAt:0, loaded:false,
+  videos:new Map(), series:new Map(), deletedSeries:new Set(), view:lsGet("vt-view","videos"), lists:structuredClone(DEFAULT_LISTS), listsUpdatedAt:0, loaded:false,
   cfg:Object.assign({owner:"",repo:"",branch:"main",path:"library.json",token:"",ytKey:""},lsGet(LS_CFG,{})),
   sha:null, dirty:false, deleted:new Set(), syncState:"", syncErr:"",
-  f:{genre:new Set(),format:new Set(),mood:new Set(),creator:new Set(),tags:new Set(),status:new Set(),watched:"all",inclRx:lsGet("vt-inclrx",false)},
-  q:"", sort:lsGet("vt-sort","added"), creatorQ:"", openId:null, playing:false
+  f:{genre:new Set(),format:new Set(),mood:new Set(),creator:new Set(),tags:new Set(),status:new Set(),series:new Set(),watched:"all",inclRx:lsGet("vt-inclrx",false)},
+  sf:{kind:new Set(),progress:"all"}, openSeries:null, q:"", sort:lsGet("vt-sort","added"), creatorQ:"", openId:null, playing:false
 };
 const $ = s=>document.querySelector(s);
 const esc = s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -398,6 +432,7 @@ function matches(v,skip){
   if(skip!=="mood"&&f.mood.size&&!f.mood.has(v.mood)) return false;
   if(skip!=="creator"&&f.creator.size&&!f.creator.has(v.creator)) return false;
   if(skip!=="status"&&f.status.size&&!f.status.has(v.status||"Verfügbar")) return false;
+  if(skip!=="series"&&f.series.size&&!(SI.get(v.id)||[]).some(p=>f.series.has(p.s.id))) return false;
   if(skip!=="tags"&&f.tags.size){ const et=effTags(v); for(const t of f.tags) if(!et.includes(t)) return false; }
   if(skip!=="watched"){ if(f.watched==="yes"&&!v.watched) return false; if(f.watched==="no"&&v.watched) return false; }
   if(S.q){ const hay=[v.title,v.creator,v.genre,v.format,v.mood,v.notes,...(v.tags||[])].join(" ").toLowerCase();
@@ -405,6 +440,7 @@ function matches(v,skip){
   return true;
 }
 function sorted(list){
+  if(S.f.series.size===1){ const sid=[...S.f.series][0]; const pos=id=>(SI.get(id)||[]).find(p=>p.s.id===sid)?.i??1e9; return list.sort((a,b)=>pos(a.id)-pos(b.id)); }
   const by={added:(a,b)=>(b.addedAt||0)-(a.addedAt||0), upload:(a,b)=>(b.uploadDate||"").localeCompare(a.uploadDate||""),
     title:(a,b)=>titleOf(a).localeCompare(titleOf(b),"de"), creator:(a,b)=>(a.creator||"~").localeCompare(b.creator||"~","de")||titleOf(a).localeCompare(titleOf(b),"de"),
     dur:(a,b)=>(b.duration||0)-(a.duration||0)}[S.sort]||((a,b)=>0);
@@ -437,7 +473,16 @@ async function fetchMeta(ids){ // → Map id → {title,creator,uploadDate,durat
 }
 
 /* ================= Rendern ================= */
-function render(){ renderRail(); renderActive(); renderGrid(); if(S.openId) renderDrawer(); }
+function render(){
+  buildIndex();
+  document.querySelectorAll("#tabs button").forEach(b=>{ b.classList.toggle("on",b.dataset.view===S.view); b.setAttribute("aria-selected",b.dataset.view===S.view); });
+  $("#addBtn").textContent=S.view==="series"?"+ Reihe":"+ Video";
+  $("#sortWrap").hidden=S.view==="series"||S.f.series.size===1;
+  $("#count").textContent=[S.videos.size?plur(S.videos.size,"Video","Videos"):"",S.series.size?plur(S.series.size,"Reihe","Reihen"):""].filter(Boolean).join(" · ");
+  if(S.view==="series"){ renderSeriesRail(); renderSeriesActive(); renderSeriesGrid(); }
+  else { renderRail(); renderActive(); renderGrid(); }
+  if(S.openId) renderDrawer(); else if(S.openSeries) renderSeriesDrawer();
+}
 
 function facetCounts(key,getter){ const m=new Map(); for(const v of S.videos.values()){ if(!matches(v,key)) continue; for(const k of [].concat(getter(v))) if(k) m.set(k,(m.get(k)||0)+1); } return m; }
 function facetBlock(title,key,values,counts){
@@ -470,6 +515,8 @@ function renderRail(){
       ${tagList.map(t=>`<button class="chip ${S.f.tags.has(t)?"on":""}" data-f="tags" data-v="${esc(t)}">${esc(t)} <span class="mono" style="opacity:.6">${tagCounts.get(t)||0}</span></button>`).join("")}
     </div></div>`:""}
     ${facetBlock("Stimmung","mood",withExtra(S.lists.moods,mC),mC)}
+    ${S.series.size?(()=>{ const c=facetCounts("series",v=>(SI.get(v.id)||[]).map(p=>p.s.id)); const ser=[...S.series.values()].sort((a,b)=>a.name.localeCompare(b.name,"de"));
+      return `<div class="facet"><h3>Reihe${S.f.series.size?`<button data-clear="series">zurücksetzen</button>`:""}</h3><div class="opts">${ser.map(x=>`<button class="opt ${S.f.series.has(x.id)?"on":""}" data-f="series" data-v="${esc(x.id)}"><span>${esc(x.name)}</span><span class="n">${c.get(x.id)||0}</span></button>`).join("")}</div></div>`; })():""}
     ${facetBlock("Status","status",STATUSES.filter(s=>sC.get(s)),sC)}`;
   const cq=$("#creatorQ"); if(cq&&S._focusCreator){ cq.focus(); cq.setSelectionRange(cq.value.length,cq.value.length); }
 }
@@ -478,8 +525,8 @@ function renderActive(){
   for(const k of ["genre","format","creator","tags","mood","status"]) for(const v of S.f[k]) chips.push(`<span class="chip">${esc(v)}<button data-rm="${k}" data-v="${esc(v)}" aria-label="Filter entfernen">✕</button></span>`);
   if(S.f.watched!=="all") chips.push(`<span class="chip">${S.f.watched==="yes"?"Gesehen":"Ungesehen"}<button data-rmw aria-label="Filter entfernen">✕</button></span>`);
   const n=[...S.videos.values()].filter(v=>matches(v)).length;
+  for(const sid of S.f.series){ const x=S.series.get(sid); if(x) chips.push(`<span class="chip">Reihe: ${esc(x.name)}<button data-rm="series" data-v="${esc(sid)}" aria-label="Filter entfernen">✕</button></span>`); }
   $("#active").innerHTML=`<span class="hint mono">${n} von ${S.videos.size}</span>${chips.join("")}${chips.length?`<button class="btn ghost" data-clearall style="padding:3px 8px;font-size:12px">Alle Filter löschen</button>`:""}`;
-  $("#count").textContent=S.videos.size?`${S.videos.size} Videos`:"";
 }
 function renderGrid(){
   const g=$("#grid");
@@ -487,20 +534,21 @@ function renderGrid(){
   if(!S.videos.size){ g.style.display="block"; g.innerHTML=`<div class="empty">
       <h2>Deine Bibliothek ist noch leer</h2>
       <p>Füge die URL eines YouTube-Videos ein. Danach vergibst du Genre, Format, Tags und Stimmung, und kannst Reactions mit ihren Originalen verknüpfen.</p>
-      <button class="btn primary" data-add>+ Erstes Video hinzufügen</button></div>`; return; }
+      <div class="actions" style="justify-content:center"><button class="btn primary" data-add>+ Erstes Video hinzufügen</button><button class="btn" data-addseries>Playlist als Reihe importieren</button></div></div>`; return; }
   const list=sorted([...S.videos.values()].filter(v=>matches(v)));
   if(!list.length){ g.style.display="block"; g.innerHTML=`<div class="empty"><h2>Nichts gefunden</h2><p>Kein Video passt zu Suche und Filtern.</p><button class="btn" data-clearall>Filter zurücksetzen</button></div>`; return; }
   g.style.display="";
+  const oneS=S.f.series.size===1?[...S.f.series][0]:null;
   g.innerHTML=list.map(v=>`<button class="card ${v.status&&v.status!=="Verfügbar"?"gone":""}" data-open="${v.id}">
-    ${coverHTML(v)}
+    ${oneS?coverHTML(v).replace('<div class="tl">',`<div class="tl"><span class="badge rx">Teil ${((SI.get(v.id)||[]).find(p=>p.s.id===oneS)?.i??0)+1}</span>`):coverHTML(v)}
     <div class="meta"><span class="t">${v.watched?"":'<span class="dot" title="ungesehen"></span>'}${esc(titleOf(v))}</span>
     <span class="s">${esc([v.creator,v.format,v.genre].filter(Boolean).join(" · ")||"Details fehlen noch")}</span></div>
   </button>`).join("");
 }
 
 /* ================= Detailansicht ================= */
-function openDrawer(id){ S.openId=id; S.confirmDel=false; S.playing=false; renderDrawer(); }
-function closeLayer(){ S.openId=null; S.playing=false; $("#layer").innerHTML=""; }
+function openDrawer(id,play){ S.openSeries=null; S.openId=id; S.confirmDel=false; S.playing=!!play; if(play) $("#layer").innerHTML=""; renderDrawer(); }
+function closeLayer(){ S.openId=null; S.openSeries=null; S.playing=false; $("#layer").innerHTML=""; }
 function miniHTML(v,attr="data-open"){ return `<button type="button" class="mini" ${attr}="${v.id}">${coverHTML(v,{badges:false})}<span style="min-width:0"><b>${esc(titleOf(v))}</b><small>${esc([v.creator,v.duration?fmtDur(v.duration):""].filter(Boolean).join(" · "))}</small></span></button>`; }
 function renderDrawer(){
   const v=S.videos.get(S.openId); if(!v){ closeLayer(); return; }
@@ -540,10 +588,266 @@ function drawerRest(v,originals,reacts,row){
         ${row("Video-ID",`<span class="mono">${esc(v.id)}</span>`)}
       </dl>
       ${v.notes?`<div class="sec"><h4>Notizen</h4><p class="notes">${esc(v.notes)}</p></div>`:""}
+      ${seriesNavHTML(v)}
       ${originals.length?`<div class="sec"><h4>Reaction auf</h4><div class="linklist">${originals.map(o=>miniHTML(o)).join("")}</div></div>`:""}
       ${reacts.length?`<div class="sec"><h4>Reactions auf dieses Video (${reacts.length})</h4><div class="linklist">${reacts.map(o=>miniHTML(o)).join("")}</div></div>`:""}
       <div>${S.confirmDel?`<div class="confirm"><span>Video endgültig aus der Bibliothek löschen?</span><button class="btn danger" data-del-yes>Löschen</button><button class="btn ghost" data-del-no>Abbrechen</button></div>`
         :`<button class="btn ghost danger" data-del>Aus Bibliothek löschen</button>`}</div>`;
+}
+
+/* ================= Reihen ================= */
+const KINDS=["Serie","Playlist","Sammlung"];
+const plur=(n,one,many)=>`${n} ${n===1?one:many}`;
+let SI=new Map(); // Video-ID → [{s: Reihe, i: Position}]
+function buildIndex(){ SI=new Map(); for(const x of S.series.values()) x.videoIds.forEach((id,i)=>{ if(!SI.has(id)) SI.set(id,[]); SI.get(id).push({s:x,i}); }); }
+function parsePlaylistId(input){
+  try{ const u=new URL(/^https?:/i.test(input.trim())?input.trim():"https://"+input.trim()); const l=u.searchParams.get("list"); return l&&/^[\w-]{10,}$/.test(l)?l:null; }
+  catch(e){ return /^(PL|UU|OL|FL)[\w-]{10,}$/.test(input.trim())?input.trim():null; }
+}
+const plUrl=pid=>"https://www.youtube.com/playlist?list="+pid;
+function seriesStats(x){
+  const vs=x.videoIds.map(id=>S.videos.get(id)).filter(Boolean);
+  const ok=vs.filter(v=>v.watched||(v.status||"Verfügbar")!=="Nicht mehr verfügbar");
+  const done=ok.filter(v=>v.watched).length, dur=ok.reduce((a,v)=>a+(v.duration||0),0);
+  const creators=[...new Set(vs.map(v=>v.creator).filter(Boolean))];
+  const next=ok.find(v=>!v.watched);
+  return {vs,n:ok.length,total:vs.length,gone:vs.length-ok.length,done,dur,creators,next,pct:ok.length?Math.round(done/ok.length*100):0};
+}
+function fmtLong(sec){ if(!sec) return ""; const h=Math.floor(sec/3600),m=Math.round(sec%3600/60); return h?`${h} h ${m} min`:`${m} min`; }
+function updateSeries(id,patch){ const x=S.series.get(id); if(!x) return; S.series.set(id,{...x,...patch,updatedAt:Date.now()}); persist(); render(); }
+function moveInSeries(sid,vid,dir){ const x=S.series.get(sid); const a=[...x.videoIds]; const i=a.indexOf(vid), j=i+dir; if(i<0||j<0||j>=a.length) return; [a[i],a[j]]=[a[j],a[i]]; updateSeries(sid,{videoIds:a}); }
+function newVideo(id,m,def,offset=0){
+  const now=Date.now()+offset;
+  return {id,title:m?.title||"",creator:m?.creator||"",uploadDate:m?.uploadDate||"",duration:m?.duration||null,
+    genre:def.genre||"",format:def.format||"",mood:def.mood||"",tags:[...(def.tags||[])],
+    status:(m===null||m?.gone)?"Nicht mehr verfügbar":(m?.status||"Verfügbar"),watched:false,notes:"",reactsTo:[],addedAt:now,updatedAt:now};
+}
+function applyDefaults(v,def){ // nur leere Felder füllen, Tags ergänzen
+  const p={}; for(const k of ["genre","format","mood"]) if(def[k]&&!v[k]) p[k]=def[k];
+  const t=(def.tags||[]).filter(x=>!(v.tags||[]).includes(x)); if(t.length) p.tags=[...(v.tags||[]),...t];
+  return Object.keys(p).length?{...v,...p,updatedAt:Date.now()}:v;
+}
+
+function seriesNavHTML(v){
+  const parts=SI.get(v.id)||[]; const ser=S.series.size;
+  const sel=ser?`<select id="addToSeries" class="small-in" style="margin:0;width:auto;max-width:100%"><option value="">Zu Reihe hinzufügen …</option>${[...S.series.values()].filter(x=>!x.videoIds.includes(v.id)).map(x=>`<option value="${esc(x.id)}">${esc(x.name)}</option>`).join("")}<option value="__new">Neue Reihe mit diesem Video …</option></select>`
+    :`<button class="btn" data-addseries-with="${v.id}">Neue Reihe mit diesem Video</button>`;
+  return `<div class="sec"><h4>${parts.length?"Teil von":"Reihen"}</h4><div class="linklist">
+    ${parts.map(({s:x,i})=>{ const prev=x.videoIds[i-1], next=x.videoIds[i+1];
+      return `<div class="seriesnav"><button class="lk" data-series="${x.id}">${esc(x.name)}<small>Teil ${i+1} von ${x.videoIds.length}</small></button>
+        <span class="actions" style="gap:4px"><button class="btn" ${prev?`data-open="${prev}"`:"disabled"} aria-label="Vorheriger Teil">‹</button><button class="btn" ${next?`data-open="${next}"`:"disabled"} aria-label="Nächster Teil">›</button></span></div>`; }).join("")}
+    <div>${sel}</div></div></div>`;
+}
+
+function seriesMatches(x,skip){
+  const st=seriesStats(x);
+  if(skip!=="kind"&&S.sf.kind.size&&!S.sf.kind.has(x.kind)) return false;
+  if(skip!=="progress"){ const p=S.sf.progress; if(p==="open"&&(st.n&&st.done===st.n)) return false; if(p==="done"&&!(st.n&&st.done===st.n)) return false; if(p==="started"&&!(st.done>0&&st.done<st.n)) return false; }
+  if(S.q){ const hay=[x.name,x.description,x.kind,...st.creators,...st.vs.map(v=>v.title)].join(" ").toLowerCase();
+    for(const w of S.q.toLowerCase().split(/\s+/).filter(Boolean)) if(!hay.includes(w)) return false; }
+  return true;
+}
+function renderSeriesRail(){
+  const r=$("#rail"); if(!S.series.size){ r.innerHTML=`<p class="hint">Filter erscheinen, sobald du Reihen angelegt hast.</p>`; return; }
+  const kc=new Map(); for(const x of S.series.values()) if(seriesMatches(x,"kind")) kc.set(x.kind,(kc.get(x.kind)||0)+1);
+  r.innerHTML=`<div class="facet"><h3>Fortschritt</h3><div class="opts">
+      ${[["all","Alle"],["started","Angefangen"],["open","Noch offen"],["done","Abgeschlossen"]].map(([k,l])=>`<button class="opt ${S.sf.progress===k?"on":""}" data-sp="${k}"><span>${l}</span></button>`).join("")}</div></div>
+    <div class="facet"><h3>Art${S.sf.kind.size?`<button data-clearkind>zurücksetzen</button>`:""}</h3><div class="opts">
+      ${KINDS.map(k=>`<button class="opt ${S.sf.kind.has(k)?"on":""}" data-sf="kind" data-v="${k}"><span>${k}</span><span class="n">${kc.get(k)||0}</span></button>`).join("")}</div></div>
+    <p class="hint" style="margin:0">Serie: Teile in fester Reihenfolge. Playlist: übernommen von YouTube. Sammlung: lose Zusammenstellung zu einem Thema.</p>`;
+}
+function renderSeriesActive(){
+  const n=[...S.series.values()].filter(x=>seriesMatches(x)).length;
+  const chips=[...S.sf.kind].map(k=>`<span class="chip">${esc(k)}<button data-sf="kind" data-v="${esc(k)}" aria-label="Filter entfernen">✕</button></span>`);
+  if(S.sf.progress!=="all") chips.push(`<span class="chip">${{started:"Angefangen",open:"Noch offen",done:"Abgeschlossen"}[S.sf.progress]}<button data-sp="all" aria-label="Filter entfernen">✕</button></span>`);
+  $("#active").innerHTML=`<span class="hint mono">${n} von ${S.series.size}</span>${chips.join("")}`;
+}
+function seriesCoverHTML(x,st){
+  const first=st.vs[0];
+  const base=first?coverHTML({...first,title:x.name,creator:st.creators.slice(0,2).join(", ")},{badges:false}):`<div class="cover" style="--h:${hash(x.id)%360}"><div class="ini">${esc(x.kind)}</div><div class="ttl">${esc(x.name)}</div></div>`;
+  return base.replace(/<\/div>\s*$/,`<div class="badges"><span class="badge">${plur(st.total,"Teil","Teile")}</span>${st.dur?`<span class="badge">${fmtLong(st.dur)}</span>`:""}</div></div>`);
+}
+function renderSeriesGrid(){
+  const g=$("#grid");
+  if(!S.loaded){ g.style.display="block"; g.innerHTML=`<p class="hint">Bibliothek wird geladen …</p>`; return; }
+  if(!S.series.size){ g.style.display="block"; g.innerHTML=`<div class="empty"><h2>Noch keine Reihen</h2>
+    <p>Fasse zusammenhängende Videos zu einer Reihe zusammen: mehrteilige Serien, ganze YouTube-Playlists oder lose Sammlungen zu einem Thema. Du siehst dann, wie weit du bist, und springst direkt zum nächsten Teil.</p>
+    <button class="btn primary" data-addseries>+ Erste Reihe anlegen</button></div>`; return; }
+  const list=[...S.series.values()].filter(x=>seriesMatches(x)).sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
+  if(!list.length){ g.style.display="block"; g.innerHTML=`<div class="empty"><h2>Nichts gefunden</h2><p>Keine Reihe passt zu Suche und Filtern.</p><button class="btn" data-clearall>Filter zurücksetzen</button></div>`; return; }
+  g.style.display="";
+  g.innerHTML=list.map(x=>{ const st=seriesStats(x); const h=st.vs[0]?coverVars(st.vs[0]):`--h:${hash(x.id)%360}`;
+    return `<button class="card" data-series="${x.id}"><div class="stack" style="${h}">${seriesCoverHTML(x,st)}</div>
+      <div class="meta"><span class="t">${esc(x.name)}</span>
+      <span class="s">${esc([x.kind,st.creators.length>2?st.creators.length+" Creator":st.creators.join(", ")].filter(Boolean).join(" · "))}</span>
+      <div class="prog"><i style="width:${st.pct}%"></i></div>
+      <span class="s mono">${st.n?(st.done===st.n?"✓ Komplett gesehen":`${st.done} von ${st.n} gesehen`):"Noch leer"}</span></div></button>`; }).join("");
+}
+
+function openSeriesDrawer(id){ S.openId=null; S.playing=false; S.openSeries=id; S.confirmSDel=false; renderSeriesDrawer(); }
+function renderSeriesDrawer(){
+  const x=S.series.get(S.openSeries); if(!x){ closeLayer(); return; }
+  const st=seriesStats(x); const numbered=x.kind!=="Sammlung";
+  const scroll=$(".drawer-body")?.scrollTop||0;
+  $("#layer").innerHTML=`<div class="scrim" data-close></div>
+  <aside class="drawer" role="dialog" aria-label="Reihe">
+    <div class="drawer-head"><h2>${esc(x.kind)}</h2><button class="btn ghost" data-close aria-label="Schließen">✕</button></div>
+    <div class="drawer-body">
+      <div class="stack" style="${st.vs[0]?coverVars(st.vs[0]):`--h:${hash(x.id)%360}`}">${seriesCoverHTML(x,st)}</div>
+      <div><h3 class="dtitle">${esc(x.name)}</h3><div class="hint" style="margin-top:4px">${esc(st.creators.join(", ")||"Noch keine Videos")}</div></div>
+      <div><div class="stat"><span>${plur(st.total,"Teil","Teile")}</span>${st.gone?`<span>${st.gone} nicht mehr verfügbar</span>`:""}${st.dur?`<span>${fmtLong(st.dur)} gesamt</span>`:""}<span class="mono">${st.done}/${st.n} gesehen</span>${(()=>{ const rest=st.vs.filter(v=>!v.watched&&v.status!=="Nicht mehr verfügbar").reduce((a,v)=>a+(v.duration||0),0); return st.done&&rest?`<span>noch ${fmtLong(rest)}</span>`:""; })()}</div>
+        <div class="prog big"><i style="width:${st.pct}%"></i></div></div>
+      <div class="actions">
+        ${st.next?`<button class="btn primary" data-continue="${st.next.id}">▶ ${st.done?"Weiterschauen":"Anfangen"}${numbered?`: Teil ${x.videoIds.indexOf(st.next.id)+1}`:""}</button>`:""}
+        <button class="btn" data-editseries="${x.id}">Bearbeiten & Videos hinzufügen</button>
+        ${x.playlistId?`<button class="btn" data-syncpl>Mit Playlist abgleichen</button><a class="btn ghost" href="${plUrl(x.playlistId)}" target="_blank" rel="noopener">Playlist ↗</a>`:""}
+      </div>
+      ${x.description?`<p class="desc">${esc(x.description)}</p>`:""}
+      <div class="sec"><h4 style="display:flex;justify-content:space-between;align-items:center">Teile
+        <span class="actions" style="gap:4px">${st.n?`<button class="btn ghost" style="padding:2px 8px;font-size:12px" data-showvideos="${x.id}">Im Raster zeigen</button><button class="btn ghost" style="padding:2px 8px;font-size:12px" data-allwatched>${st.done===st.n?"Alle ungesehen":"Alle gesehen"}</button>`:""}</span></h4>
+        <div class="parts">${x.videoIds.map((id,i)=>{ const v=S.videos.get(id); if(!v) return "";
+          return `<div class="part ${v.watched?"done":""}"><span class="num mono">${numbered?i+1:"·"}</span>${miniHTML(v)}
+            <span class="pact"><input type="checkbox" data-sw="${id}" ${v.watched?"checked":""} title="Gesehen" aria-label="Gesehen">
+            <button data-mv="-1" data-id="${id}" ${i===0?"disabled":""} aria-label="Nach oben">↑</button><button data-mv="1" data-id="${id}" ${i===x.videoIds.length-1?"disabled":""} aria-label="Nach unten">↓</button>
+            <button data-rmpart="${id}" aria-label="Aus der Reihe entfernen" title="Aus der Reihe entfernen">✕</button></span></div>`; }).join("")||'<span class="hint">Noch keine Videos in dieser Reihe.</span>'}</div></div>
+      <div>${S.confirmSDel?`<div class="confirm"><span>Reihe löschen? Die Videos bleiben in deiner Bibliothek.</span><button class="btn danger" data-sdel-yes>Reihe löschen</button><button class="btn ghost" data-sdel-no>Abbrechen</button></div>`
+        :`<button class="btn ghost danger" data-sdel>Reihe löschen</button>`}</div>
+    </div>
+  </aside>`;
+  $(".drawer-body").scrollTop=scroll;
+}
+
+/* ---------- Playlist ---------- */
+async function ytJson(url){
+  const r=await fetch(url); const j=await r.json().catch(()=>({}));
+  if(!r.ok) throw {msg:r.status===400||r.status===403?`YouTube hat die Anfrage abgelehnt${j?.error?.message?": "+j.error.message:""}.`:`YouTube-API-Fehler ${r.status}.`};
+  return j;
+}
+async function fetchPlaylist(pid,onProgress){
+  if(!S.cfg.ytKey) throw {msg:"Für Playlists brauchst du den YouTube-API-Schlüssel (Einstellungen). Ohne Schlüssel kannst du die Video-URLs unten einzeln einfügen.",nokey:true};
+  if(/^(WL|LL)$/.test(pid)) throw {msg:"„Später ansehen“ und „Videos mit „Mag ich““ sind privat und lassen sich nicht laden."};
+  if(/^RD/.test(pid)) throw {msg:"Das ist ein automatischer YouTube-Mix. Mixe lassen sich nicht als Playlist laden."};
+  const key=encodeURIComponent(S.cfg.ytKey);
+  const pj=await ytJson(`https://www.googleapis.com/youtube/v3/playlists?part=snippet&id=${pid}&key=${key}`);
+  const info=pj.items?.[0];
+  if(!info) throw {msg:"Playlist nicht gefunden. Private Playlists lassen sich nicht laden, öffentliche und nicht gelistete schon."};
+  const ids=[], titles=new Map(); let page="";
+  do{ const j=await ytJson(`https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails&maxResults=50&playlistId=${pid}&key=${key}${page?"&pageToken="+page:""}`);
+    for(const it of j.items||[]){ const id=it.contentDetails?.videoId; if(id&&!ids.includes(id)){ ids.push(id); const t=it.snippet?.title||""; titles.set(id,t==="Deleted video"?"Gelöschtes Video":t==="Private video"?"Privates Video":t); } }
+    page=j.nextPageToken; onProgress?.(ids.length);
+  }while(page&&ids.length<2000);
+  const meta=await fetchMeta(ids);
+  for(const [id,m] of meta) if(m===null) meta.set(id,{gone:true,title:titles.get(id)||""});
+  return {title:info.snippet?.title||"",channel:info.snippet?.channelTitle||"",description:info.snippet?.description||"",ids,meta};
+}
+async function syncPlaylist(sid){
+  const x=S.series.get(sid); if(!x?.playlistId) return;
+  toast("Gleiche mit Playlist ab …");
+  try{ const pl=await fetchPlaylist(x.playlistId);
+    const fresh=pl.ids.filter(id=>!x.videoIds.includes(id)); const missing=x.videoIds.filter(id=>!pl.ids.includes(id)).length;
+    fresh.forEach((id,i)=>{ if(!S.videos.has(id)) S.videos.set(id,newVideo(id,pl.meta.get(id),x.defaults||{},fresh.length-i)); });
+    for(const [id,m] of pl.meta){ const v=S.videos.get(id); if(v&&m?.gone&&v.status!=="Nicht mehr verfügbar") S.videos.set(id,{...v,status:"Nicht mehr verfügbar",updatedAt:Date.now()}); }
+    updateSeries(sid,{videoIds:[...x.videoIds,...fresh]});
+    toast(fresh.length?`${fresh.length} neue ${fresh.length===1?"Folge":"Folgen"} hinzugefügt`:"Schon auf dem neuesten Stand");
+    if(missing) setTimeout(()=>toast(`${missing} ${missing===1?"Teil ist":"Teile sind"} nicht mehr in der Playlist (bleiben in der Reihe)`),2000);
+  }catch(e){ toast(e.msg||"Abgleich fehlgeschlagen"); }
+}
+
+/* ---------- Reihen-Editor ---------- */
+let ES=null;
+function openSeriesEditor(id,{pick=[],playlist=""}={}){
+  const x=id?S.series.get(id):null; const def=x?.defaults||{};
+  ES={id:x?.id||null,isNew:!x,pick:[...pick],q:"",pl:null};
+  S.openId=null; S.openSeries=null; S.playing=false;
+  const opt=(list,val)=>`<option value="">–</option>${[...new Set([...list,...(val&&!list.includes(val)?[val]:[])])].map(v=>`<option ${v===val?"selected":""}>${esc(v)}</option>`).join("")}`;
+  $("#layer").innerHTML=`<div class="scrim"></div>
+  <div class="modal" data-modalbg><form class="sheet" id="sed" novalidate>
+    <div class="sheet-head"><h2>${x?"Reihe bearbeiten":"Neue Reihe"}</h2><button type="button" class="btn ghost" data-close aria-label="Schließen">✕</button></div>
+    <div class="sheet-body">
+      <div class="plbox"><div class="f"><label for="se-pl">YouTube-Playlist ${x?.playlistId?"(verknüpft)":"(optional)"}</label>
+        <div class="urlrow"><input type="url" id="se-pl" placeholder="https://www.youtube.com/playlist?list=…" value="${esc(playlist||(x?.playlistId?plUrl(x.playlistId):""))}"><button type="button" class="btn" data-loadpl>Playlist laden</button></div>
+        <span class="hint" id="se-plmsg">${S.cfg.ytKey?"Lädt alle Videos der Playlist in der richtigen Reihenfolge, inklusive Titel, Dauer und Upload.":"Zum Laden ganzer Playlists brauchst du den YouTube-API-Schlüssel (Einstellungen). Ohne Schlüssel kannst du die Video-URLs unten einfügen."}</span></div></div>
+      <div class="row">
+        <div class="f" style="grid-column:span 2"><label for="se-name">Name</label><input type="text" id="se-name" value="${esc(x?.name)}" placeholder="z. B. Geschichte des Internets"></div>
+        <div class="f"><label for="se-kind">Art</label><select id="se-kind">${KINDS.map(k=>`<option ${k===(x?.kind||"Serie")?"selected":""}>${k}</option>`).join("")}</select></div>
+      </div>
+      <div class="f"><label for="se-desc">Beschreibung</label><textarea id="se-desc" style="min-height:70px" placeholder="Worum geht es, warum willst du es schauen …">${esc(x?.description)}</textarea></div>
+      <div class="f"><label for="se-urls">Videos per URL hinzufügen</label><textarea id="se-urls" style="min-height:80px" class="mono" placeholder="Eine YouTube-URL pro Zeile, in der gewünschten Reihenfolge"></textarea><span class="hint" id="se-urlmsg"></span></div>
+      <div class="f"><label for="se-q">Aus deiner Bibliothek hinzufügen</label>
+        <input type="text" id="se-q" placeholder="Titel, Creator oder Tag suchen" autocomplete="off">
+        <div class="rxres" id="se-res"></div><div class="linklist" id="se-pick"></div></div>
+      <hr class="sep">
+      <h3>Standardwerte für neue Videos</h3>
+      <p class="hint" style="margin:0">Gelten für Videos, die über diese Reihe neu in die Bibliothek kommen.</p>
+      <div class="row">
+        <div class="f"><label for="se-genre">Genre</label><select id="se-genre">${opt(S.lists.genres,def.genre)}</select></div>
+        <div class="f"><label for="se-format">Format</label><select id="se-format">${opt(S.lists.formats,def.format)}</select></div>
+        <div class="f"><label for="se-mood">Stimmung</label><select id="se-mood">${opt(S.lists.moods,def.mood)}</select></div>
+      </div>
+      <div class="f"><label for="se-tags">Tags</label><input type="text" id="se-tags" list="dl-alltags" value="${esc((def.tags||[]).join(", "))}" placeholder="mit Komma trennen"><datalist id="dl-alltags">${allTags().map(t=>`<option value="${esc(t[0])}">`).join("")}</datalist></div>
+      <label class="check"><input type="checkbox" id="se-applyold"> Auch bei hinzugefügten Videos, die schon in der Bibliothek sind, leere Felder füllen und Tags ergänzen</label>
+    </div>
+    <div class="sheet-foot"><span class="hint err" id="se-err"></span><div class="actions"><button type="button" class="btn ghost" data-close>Abbrechen</button><button type="submit" class="btn primary">${x?"Speichern":"Reihe anlegen"}</button></div></div>
+  </form></div>`;
+  $("#se-urls").addEventListener("input",()=>{ const r=parseUrlList($("#se-urls").value); $("#se-urlmsg").className=r.bad?"hint err":"hint"; $("#se-urlmsg").textContent=r.ids.length||r.bad?`${plur(r.ids.length,"Video","Videos")} erkannt${r.bad?`, ${plur(r.bad,"Zeile","Zeilen")} ohne gültige Video-URL`:""}`:""; });
+  $("#se-q").addEventListener("input",e=>{ ES.q=e.target.value; renderSedRes(); });
+  $("#sed").addEventListener("submit",e=>{ e.preventDefault(); saveSeries(); });
+  renderSedList();
+  if(playlist) loadPlaylistInEditor(); else $("#se-name").focus();
+}
+function parseUrlList(text){ const ids=[]; let bad=0; for(const line of text.split(/[\n\s]+/).map(l=>l.trim()).filter(Boolean)){ const id=parseId(line); if(id){ if(!ids.includes(id)) ids.push(id); } else bad++; } return {ids,bad}; }
+function renderSedList(){
+  const box=$("#se-pick"); if(!box) return;
+  box.innerHTML=ES.pick.map(id=>{ const v=S.videos.get(id); return v?`<div class="rxsel">${miniHTML(v,"data-noop")}<button type="button" class="btn ghost" data-sedrm="${id}" aria-label="Wieder entfernen">✕</button></div>`:""; }).join("");
+}
+function renderSedRes(){
+  const box=$("#se-res"); const q=ES.q.trim().toLowerCase(); if(!q){ box.innerHTML=""; return; }
+  const inSeries=new Set(ES.id?S.series.get(ES.id).videoIds:[]);
+  const words=q.split(/\s+/);
+  const res=[...S.videos.values()].filter(v=>!inSeries.has(v.id)&&!ES.pick.includes(v.id)&&words.every(w=>[v.title,v.creator,...(v.tags||[])].join(" ").toLowerCase().includes(w))).slice(0,8);
+  box.innerHTML=res.length?res.map(v=>miniHTML(v,"data-sedpick")).join(""):`<span class="hint">Nichts gefunden.</span>`;
+}
+async function loadPlaylistInEditor(){
+  const msg=$("#se-plmsg"), btn=$("[data-loadpl]"); const pid=parsePlaylistId($("#se-pl").value);
+  if(!pid){ msg.className="hint err"; msg.textContent="Das ist keine Playlist-URL. Sie enthält normalerweise „list=“."; return; }
+  btn.disabled=true; btn.textContent="Lade …"; msg.className="hint";
+  try{ const pl=await fetchPlaylist(pid,n=>msg.textContent=`${n} Videos gefunden …`);
+    ES.pl={pid,...pl};
+    if(!$("#se-name").value) $("#se-name").value=pl.title;
+    if(!$("#se-desc").value&&pl.description) $("#se-desc").value=pl.description.slice(0,1500);
+    if(ES.isNew) $("#se-kind").value="Playlist";
+    const known=pl.ids.filter(id=>S.videos.has(id)).length, gone=[...pl.meta.values()].filter(m=>m?.gone).length;
+    const dur=[...pl.meta.values()].reduce((a,m)=>a+(m?.duration||0),0);
+    msg.className="hint ok"; msg.textContent=`„${pl.title}“ von ${pl.channel}: ${plur(pl.ids.length,"Video","Videos")}${dur?`, ${fmtLong(dur)}`:""}. ${known?`${known===1?"1 davon ist":known+" davon sind"} schon in deiner Bibliothek. `:""}${gone?`${gone===1?"1 ist":gone+" sind"} gelöscht oder privat. `:""}Beim Speichern werden alle übernommen.`;
+  }catch(e){ msg.className="hint err"; msg.textContent=e.msg||"Die Playlist konnte nicht geladen werden."; }
+  finally{ btn.disabled=false; btn.textContent="Playlist laden"; }
+}
+function saveSeries(){
+  const err=$("#se-err"); const name=$("#se-name").value.trim();
+  if(!name){ err.textContent="Gib der Reihe einen Namen."; $("#se-name").focus(); return; }
+  const plInput=$("#se-pl").value.trim(); const pid=plInput?parsePlaylistId(plInput):null;
+  if(plInput&&!pid){ err.textContent="Die Playlist-URL ist ungültig. Lass das Feld leer oder korrigiere sie."; return; }
+  const def={genre:$("#se-genre").value,format:$("#se-format").value,mood:$("#se-mood").value,
+    tags:[...new Set($("#se-tags").value.split(",").map(t=>t.trim().toLowerCase().replace(/\s+/g," ")).filter(Boolean))]};
+  const applyOld=$("#se-applyold").checked;
+  const prev=ES.id?S.series.get(ES.id):null; const order=[...(prev?.videoIds||[])];
+  const add=[]; const push=id=>{ if(!order.includes(id)&&!add.includes(id)) add.push(id); };
+  if(ES.pl&&ES.pl.pid===pid) ES.pl.ids.forEach(push);
+  parseUrlList($("#se-urls").value).ids.forEach(push);
+  ES.pick.forEach(push);
+  const now=Date.now(), needMeta=[];
+  add.forEach((id,i)=>{
+    const cur=S.videos.get(id);
+    if(!cur){ const m=ES.pl?.meta?.has(id)?ES.pl.meta.get(id):undefined; S.videos.set(id,newVideo(id,m,def,add.length-i)); S.deleted.delete(id); if(m===undefined) needMeta.push(id); }
+    else if(applyOld) S.videos.set(id,applyDefaults(cur,def));
+  });
+  const id=ES.id||("s"+now.toString(36)+Math.random().toString(36).slice(2,6));
+  S.series.set(id,{...(prev||{}),id,name,kind:$("#se-kind").value,description:$("#se-desc").value.trim(),playlistId:pid||"",
+    videoIds:[...order,...add],defaults:def,addedAt:prev?.addedAt||now,updatedAt:now});
+  S.deletedSeries.delete(id);
+  persist(); S.view="series"; lsSet("vt-view","series"); closeLayer(); render(); openSeriesDrawer(id);
+  toast(add.length?`${add.length} ${add.length===1?"Video":"Videos"} hinzugefügt`:(ES.isNew?"Reihe angelegt":"Gespeichert"));
+  if(needMeta.length) enrichStubs(needMeta);
 }
 
 /* ================= Bearbeiten ================= */
@@ -598,6 +902,8 @@ function checkUrl(){
   const ex=S.videos.get(id);
   if(ex&&ex.title){ h.className="hint err"; h.innerHTML=`Schon in der Bibliothek: „${esc(ex.title)}“. <button type="button" class="btn ghost" style="padding:0 4px;color:var(--accent)" data-open="${id}">Öffnen</button>`; return; }
   h.className="hint ok"; h.textContent=ex?"Dieses Video existiert schon als Original-Platzhalter und wird jetzt vervollständigt.":`Video-ID ${id} erkannt.`;
+  const pl=parsePlaylistId($("#e-url").value);
+  if(pl) h.insertAdjacentHTML("beforeend",` Die URL gehört auch zu einer Playlist. <button type="button" class="btn ghost" style="padding:0 4px;color:var(--accent)" data-importpl="${esc($("#e-url").value.trim())}">Ganze Playlist als Reihe importieren</button>`);
   if(E.autoFetched!==id){ E.autoFetched=id; autofill(false); }
   renderRxRes();
 }
@@ -703,6 +1009,7 @@ async function enrichStubs(ids){ // Originale im Hintergrund mit Titel/Creator f
 function updateVideo(id,patch){ const v=S.videos.get(id); if(!v) return; S.videos.set(id,{...v,...patch,updatedAt:Date.now()}); persist(); render(); }
 function removeVideo(id){
   S.videos.delete(id); S.deleted.add(id);
+  for(const x of [...S.series.values()]) if(x.videoIds.includes(id)) S.series.set(x.id,{...x,videoIds:x.videoIds.filter(i=>i!==id),updatedAt:Date.now()});
   for(const v of [...S.videos.values()]) if((v.reactsTo||[]).includes(id)) S.videos.set(v.id,{...v,reactsTo:v.reactsTo.filter(x=>x!==id),updatedAt:Date.now()});
   persist(); render();
 }
@@ -780,6 +1087,7 @@ function openSettings(){
     const file=e.target.files[0]; if(!file) return; const msg=$("#s-msg");
     try{ const d=JSON.parse(await file.text()); if(!Array.isArray(d.videos)) throw 0;
       let n=0; for(const v of d.videos){ if(!v?.id) continue; const cur=S.videos.get(v.id); if(!cur||(v.updatedAt||0)>(cur.updatedAt||0)){ S.videos.set(v.id,v); n++; } }
+      for(const x of d.series||[]){ if(!x?.id) continue; const cur=S.series.get(x.id); if(!cur||(x.updatedAt||0)>(cur.updatedAt||0)) S.series.set(x.id,x); }
       if(d.lists&&(d.listsUpdatedAt||0)>(S.listsUpdatedAt||0)){ S.lists=d.lists; S.listsUpdatedAt=d.listsUpdatedAt; }
       persist(); render(); msg.className="hint ok"; msg.textContent=`${n} Videos importiert oder aktualisiert.`;
     }catch(err){ msg.className="hint err"; msg.textContent="Die Datei ist kein Videothek-Export."; }
@@ -810,6 +1118,27 @@ document.addEventListener("click",e=>{
   if(d.modalbg!==undefined){ if(e.target===t) closeLayer(); return; }
   if(d.close!==undefined){ closeLayer(); return; }
   if(d.add!==undefined){ openEditor(); return; }
+  if(d.view){ S.view=d.view; lsSet("vt-view",S.view); closeLayer(); render(); return; }
+  if(d.series){ openSeriesDrawer(d.series); return; }
+  if(d.addseries!==undefined){ openSeriesEditor(); return; }
+  if(d.editseries){ openSeriesEditor(d.editseries); return; }
+  if(d.sf){ const st=S.sf.kind; st.has(d.v)?st.delete(d.v):st.add(d.v); render(); return; }
+  if(d.sp){ S.sf.progress=d.sp; render(); return; }
+  if(d.continue){ openDrawer(d.continue,true); return; }
+  if(d.showvideos){ S.view="videos"; lsSet("vt-view",S.view); for(const k of ["genre","format","creator","tags","mood","status","series"]) S.f[k].clear(); S.f.series.add(d.showvideos); closeLayer(); render(); return; }
+  if(d.mv){ moveInSeries(S.openSeries,d.id,+d.mv); return; }
+  if(d.rmpart){ const x=S.series.get(S.openSeries); updateSeries(x.id,{videoIds:x.videoIds.filter(i=>i!==d.rmpart)}); toast("Aus der Reihe entfernt"); return; }
+  if(d.allwatched!==undefined){ const x=S.series.get(S.openSeries); const all=x.videoIds.every(id=>S.videos.get(id)?.watched); for(const id of x.videoIds){ const v=S.videos.get(id); if(v&&v.watched===all) S.videos.set(id,{...v,watched:!all,updatedAt:Date.now()}); } persist(); render(); return; }
+  if(d.syncpl!==undefined){ syncPlaylist(S.openSeries); return; }
+  if(d.sdel!==undefined){ S.confirmSDel=true; renderSeriesDrawer(); return; }
+  if(d.sdelNo!==undefined){ S.confirmSDel=false; renderSeriesDrawer(); return; }
+  if(d.sdelYes!==undefined){ const id=S.openSeries; closeLayer(); S.series.delete(id); S.deletedSeries.add(id); S.f.series.delete(id); persist(); render(); toast("Reihe gelöscht, Videos bleiben erhalten"); return; }
+  if(d.sedpick){ ES.pick.push(d.sedpick); ES.q=""; renderSedList(); $("#se-q").value=""; renderSedRes(); return; }
+  if(d.sedrm){ ES.pick=ES.pick.filter(x=>x!==d.sedrm); renderSedList(); return; }
+  if(d.loadpl!==undefined){ loadPlaylistInEditor(); return; }
+  if(d.clearkind!==undefined){ S.sf.kind.clear(); render(); return; }
+  if(d.addseriesWith){ openSeriesEditor(null,{pick:[d.addseriesWith]}); return; }
+  if(d.importpl){ openSeriesEditor(null,{playlist:d.importpl}); return; }
   if(d.settings!==undefined){ openSettings(); return; }
   if(d.retry!==undefined){ S.dirty?push():pull(); return; }
   if(d.open){ openDrawer(d.open); return; }
@@ -819,7 +1148,7 @@ document.addEventListener("click",e=>{
   if(d.w){ S.f.watched=d.w; render(); return; }
   if(d.rm){ S.f[d.rm].delete(d.v); render(); return; }
   if(d.rmw!==undefined){ S.f.watched="all"; render(); return; }
-  if(d.clearall!==undefined){ for(const k of ["genre","format","creator","tags","mood","status"]) S.f[k].clear(); S.f.watched="all"; S.q=""; $("#q").value=""; render(); return; }
+  if(d.clearall!==undefined){ for(const k of ["genre","format","creator","tags","mood","status","series"]) S.f[k].clear(); S.sf.kind.clear(); S.sf.progress="all"; S.f.watched="all"; S.q=""; $("#q").value=""; render(); return; }
   if(d.tagfilter){ S.f.tags.add(d.tagfilter); closeLayer(); render(); return; }
   if(d.edit){ openEditor(d.edit); return; }
   if(d.toggleWatched!==undefined){ const v=S.videos.get(S.openId); updateVideo(v.id,{watched:!v.watched}); toast(v.watched?"Als ungesehen markiert":"Als gesehen markiert"); return; }
@@ -832,12 +1161,19 @@ document.addEventListener("click",e=>{
   if(d.newrx){ E.stubs.set(d.newrx,{id:d.newrx,title:"",creator:"",tags:[],reactsTo:[],status:"Verfügbar",watched:false,addedAt:Date.now()}); E.reactsTo.push(d.newrx); E.rxQ=""; renderRx(); return; }
   if(d.rmrx){ E.reactsTo=E.reactsTo.filter(x=>x!==d.rmrx); renderRx(); return; }
 });
-$("#addBtn").addEventListener("click",()=>openEditor());
+$("#addBtn").addEventListener("click",()=>S.view==="series"?openSeriesEditor():openEditor());
+document.addEventListener("change",e=>{
+  const t=e.target;
+  if(t.dataset.sw){ const v=S.videos.get(t.dataset.sw); if(v) updateVideo(v.id,{watched:t.checked}); }
+  if(t.id==="addToSeries"&&t.value){ const vid=S.openId;
+    if(t.value==="__new") openSeriesEditor(null,{pick:[vid]});
+    else { const x=S.series.get(t.value); if(x&&!x.videoIds.includes(vid)) updateSeries(x.id,{videoIds:[...x.videoIds,vid]}); toast(`Zu „${x.name}“ hinzugefügt`); } }
+});
 $("#listsBtn").addEventListener("click",openLists);
 $("#settingsBtn").addEventListener("click",openSettings);
 $("#sync").addEventListener("click",()=>{ if(S.syncState==="err") (S.dirty?push():pull()); else openSettings(); });
 $("#filterToggle").addEventListener("click",()=>$("#rail").classList.toggle("open"));
-$("#q").addEventListener("input",e=>{ S.q=e.target.value.trim(); renderActive(); renderGrid(); });
+$("#q").addEventListener("input",e=>{ S.q=e.target.value.trim(); if(S.view==="series"){ renderSeriesActive(); renderSeriesGrid(); } else { renderActive(); renderGrid(); } });
 $("#sort").value=S.sort;
 $("#sort").addEventListener("change",e=>{ S.sort=e.target.value; lsSet("vt-sort",S.sort); renderGrid(); });
 $("#rail").addEventListener("change",e=>{ if(e.target.id==="inclRx"){ S.f.inclRx=e.target.checked; lsSet("vt-inclrx",S.f.inclRx); render(); } });
@@ -847,7 +1183,10 @@ document.addEventListener("keydown",e=>{
   if(e.key==="/"&&!/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)&&!$("#layer").innerHTML){ e.preventDefault(); $("#q").focus(); } });
 document.addEventListener("paste",e=>{ // YouTube-URL irgendwo einfügen → direkt neues Video
   if(/INPUT|TEXTAREA/.test(document.activeElement.tagName)||$("#layer").innerHTML) return;
-  const txt=(e.clipboardData?.getData("text")||"").trim(); if(/youtu/.test(txt)&&parseId(txt)){ e.preventDefault(); openEditor(null,txt); } });
+  const txt=(e.clipboardData?.getData("text")||"").trim(); if(!/youtu/.test(txt)) return;
+  const pl=parsePlaylistId(txt);
+  if(pl&&!parseId(txt)){ e.preventDefault(); openSeriesEditor(null,{playlist:txt}); }
+  else if(parseId(txt)){ e.preventDefault(); openEditor(null,txt); } });
 document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible"&&GH.ready()&&!pushing&&!S.dirty) pull({quiet:true}); });
 window.addEventListener("beforeunload",e=>{ if(S.dirty&&GH.ready()){ push(); e.preventDefault(); e.returnValue=""; } });
 // Link mit ?add=URL (z. B. per Lesezeichen) öffnet direkt das Formular
@@ -857,7 +1196,7 @@ const addParam=new URLSearchParams(location.search).get("add");
 (function start(){
   const cache=lsGet(LS_CACHE,null);
   if(cache&&cache.data&&(!GH.ready()||cache.repoKey===repoKey()||!cache.repoKey)){
-    applyData(cache.data); S.sha=cache.sha||null; S.dirty=!!cache.dirty; S.deleted=new Set(cache.deleted||[]);
+    applyData(cache.data); S.sha=cache.sha||null; S.dirty=!!cache.dirty; S.deleted=new Set(cache.deleted||[]); S.deletedSeries=new Set(cache.deletedSeries||[]);
     S.loaded=true;
   }
   if(!GH.ready()) S.loaded=true;

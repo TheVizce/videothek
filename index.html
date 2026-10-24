@@ -200,6 +200,24 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:4px 0}
 .stat{display:flex;flex-wrap:wrap;gap:6px 14px;color:var(--muted);font-size:13px}
 .plbox{border:1px solid var(--line);border-radius:var(--r);padding:12px;background:var(--bg);display:flex;flex-direction:column;gap:8px}
 .desc{white-space:pre-wrap;margin:0;color:var(--ink);max-height:9.5em;overflow:auto}
+.tabs .cnt{display:inline-block;min-width:18px;padding:0 5px;margin-left:5px;border-radius:9px;background:var(--accent);color:var(--accent-ink);font-size:11px;font-family:var(--f-mono);line-height:18px}
+.feedbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:6px}
+.dayhead{font-family:var(--f-display);font-size:18px;margin:22px 0 12px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+.dayhead:first-of-type{margin-top:8px}
+.fcard{gap:8px}
+.fopen{border:0;background:none;padding:0;width:100%;display:block;text-align:left}
+.fopen:hover .cover{transform:translateY(-2px);box-shadow:0 6px 18px -8px rgba(0,0,0,.35)}
+.factions{display:flex;gap:4px;flex-wrap:wrap}
+.factions .btn{padding:5px 9px;font-size:13px}
+.chrow{border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
+.chrow summary{display:flex;justify-content:space-between;gap:10px;align-items:baseline;padding:10px 12px;cursor:pointer;list-style:none}
+.chrow summary::-webkit-details-marker{display:none}
+.chrow summary::before{content:"›";color:var(--muted);transition:transform .15s;display:inline-block;margin-right:2px}
+.chrow[open] summary::before{transform:rotate(90deg)}
+.chrow .chname{font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chrow summary .hint{text-align:right;max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chbody{padding:4px 12px 12px;display:flex;flex-direction:column;gap:12px;border-top:1px solid var(--line);padding-top:12px}
+.follow{display:inline-flex;align-items:center;gap:6px;margin-top:6px}
 @media (max-width:820px){
   .main{grid-template-columns:minmax(0,1fr)}
   .rail{position:static;max-height:none;display:none;border:1px solid var(--line);border-radius:10px;padding:14px;background:var(--surface)}
@@ -233,7 +251,7 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:4px 0}
   <section>
     <div id="notice"></div>
     <div class="bar">
-      <div class="bar-left"><div class="tabs" role="tablist" id="tabs"><button data-view="videos" role="tab">Videos</button><button data-view="series" role="tab">Reihen</button></div>
+      <div class="bar-left"><div class="tabs" role="tablist" id="tabs"><button data-view="videos" role="tab">Videos</button><button data-view="series" role="tab">Reihen</button><button data-view="feed" role="tab">Abos<span class="cnt" id="feedcount" hidden></span></button></div>
       <div class="active" id="active"></div></div>
       <label class="sort" id="sortWrap">Sortieren
         <select id="sort">
@@ -307,10 +325,13 @@ function ghErr(status,what){
   return {status,msg:m||`GitHub hat mit Fehler ${status} geantwortet. Versuch es gleich noch einmal.`};
 }
 
-function snapshotData(){ return {version:1,updatedAt:Date.now(),listsUpdatedAt:S.listsUpdatedAt||0,lists:S.lists,videos:[...S.videos.values()].sort((a,b)=>(a.addedAt||0)-(b.addedAt||0)),series:[...S.series.values()].sort((a,b)=>(a.addedAt||0)-(b.addedAt||0))}; }
+function snapshotData(){ return {version:1,updatedAt:Date.now(),listsUpdatedAt:S.listsUpdatedAt||0,lists:S.lists,videos:[...S.videos.values()].sort((a,b)=>(a.addedAt||0)-(b.addedAt||0)),series:[...S.series.values()].sort((a,b)=>(a.addedAt||0)-(b.addedAt||0)),channels:[...S.channels.values()].sort((a,b)=>(a.addedAt||0)-(b.addedAt||0)),feedHidden:pruneHidden(S.feedHidden)}; }
+function pruneHidden(h){ const lim=Date.now()-120*864e5; const o={}; for(const [k,t] of Object.entries(h||{})) if(t>lim) o[k]=t; return o; }
 function applyData(d){
   S.videos=new Map((d?.videos||[]).filter(v=>v&&v.id).map(v=>[v.id,v]));
   S.series=new Map((d?.series||[]).filter(x=>x&&x.id).map(x=>[x.id,x]));
+  S.channels=new Map((d?.channels||[]).filter(x=>x&&x.id).map(x=>[x.id,x]));
+  S.feedHidden={...(d?.feedHidden||{})};
   if(d?.lists) S.lists={genres:d.lists.genres||[],formats:d.lists.formats||[],moods:d.lists.moods||[]};
   S.listsUpdatedAt=d?.listsUpdatedAt||0;
 }
@@ -323,9 +344,14 @@ function mergeRemote(d){
   for(const x of d?.series||[]) if(x&&x.id&&!S.deletedSeries.has(x.id)) so.set(x.id,x);
   for(const x of S.series.values()){ const r=so.get(x.id); if(!r||(x.updatedAt||0)>=(r.updatedAt||0)) so.set(x.id,x); }
   S.series=so;
+  const co=new Map();
+  for(const x of d?.channels||[]) if(x&&x.id&&!S.deletedChannels.has(x.id)) co.set(x.id,x);
+  for(const x of S.channels.values()){ const r=co.get(x.id); if(!r||(x.updatedAt||0)>=(r.updatedAt||0)) co.set(x.id,x); }
+  S.channels=co;
+  for(const [k,t] of Object.entries(d?.feedHidden||{})) if(!(k in S.feedHidden)&&!S.unhidden.has(k)) S.feedHidden[k]=t;
   if(d?.lists&&(d.listsUpdatedAt||0)>(S.listsUpdatedAt||0)){ S.lists=d.lists; S.listsUpdatedAt=d.listsUpdatedAt; }
 }
-function cacheLocal(){ lsSet(LS_CACHE,{data:snapshotData(),sha:S.sha,dirty:S.dirty,deleted:[...S.deleted],deletedSeries:[...S.deletedSeries],repoKey:repoKey()}); }
+function cacheLocal(){ lsSet(LS_CACHE,{data:snapshotData(),sha:S.sha,dirty:S.dirty,deleted:[...S.deleted],deletedSeries:[...S.deletedSeries],deletedChannels:[...S.deletedChannels],unhidden:[...S.unhidden],repoKey:repoKey()}); }
 const repoKey=()=>`${S.cfg.owner}/${S.cfg.repo}@${S.cfg.branch}:${S.cfg.path}`;
 
 let pushTimer=null, pushing=false;
@@ -336,7 +362,7 @@ async function push(){
   pushing=true; S.syncState="busy"; setSync();
   try{
     for(let attempt=0;attempt<3;attempt++){
-      try{ S.sha=await GH.write(snapshotData(),S.sha); S.dirty=false; S.deleted.clear(); S.deletedSeries.clear(); S.syncState="ok"; S.syncErr=""; break; }
+      try{ S.sha=await GH.write(snapshotData(),S.sha); S.dirty=false; S.deleted.clear(); S.deletedSeries.clear(); S.deletedChannels.clear(); S.unhidden.clear(); S.syncState="ok"; S.syncErr=""; break; }
       catch(e){ if(!e.conflict||attempt===2) throw e; const remote=await GH.read(); S.sha=remote.sha; mergeRemote(remote.data); render(); }
     }
   }catch(e){ S.syncState="err"; S.syncErr=e.msg||"Speichern auf GitHub fehlgeschlagen. Prüf deine Verbindung."; }
@@ -348,7 +374,7 @@ async function pull({quiet}={}){
   try{
     const remote=await GH.read();
     if(S.dirty){ mergeRemote(remote.data); S.sha=remote.sha; persist(); }
-    else if(remote.sha!==S.sha||!quiet){ if(remote.data) applyData(remote.data); else { S.videos=new Map(); S.series=new Map(); } S.sha=remote.sha; }
+    else if(remote.sha!==S.sha||!quiet){ if(remote.data) applyData(remote.data); else { S.videos=new Map(); S.series=new Map(); S.channels=new Map(); S.feedHidden={}; } S.sha=remote.sha; }
     S.syncState=S.dirty?"busy":"ok"; S.syncErr="";
     if(!remote.sha&&!S.dirty){ S.syncState="ok"; }
     cacheLocal();
@@ -374,7 +400,7 @@ function showNotice(){
 
 /* ================= Zustand & Helfer ================= */
 const S = {
-  videos:new Map(), series:new Map(), deletedSeries:new Set(), view:lsGet("vt-view","videos"), lists:structuredClone(DEFAULT_LISTS), listsUpdatedAt:0, loaded:false,
+  videos:new Map(), series:new Map(), deletedSeries:new Set(), channels:new Map(), deletedChannels:new Set(), feedHidden:{}, unhidden:new Set(), view:lsGet("vt-view","videos"), lists:structuredClone(DEFAULT_LISTS), listsUpdatedAt:0, loaded:false,
   cfg:Object.assign({owner:"",repo:"",branch:"main",path:"library.json",token:"",ytKey:""},lsGet(LS_CFG,{})),
   sha:null, dirty:false, deleted:new Set(), syncState:"", syncErr:"",
   f:{genre:new Set(),format:new Set(),mood:new Set(),creator:new Set(),tags:new Set(),status:new Set(),series:new Set(),watched:"all",inclRx:lsGet("vt-inclrx",false)},
@@ -457,7 +483,7 @@ async function fetchMeta(ids){ // → Map id → {title,creator,uploadDate,durat
       if(!r.ok){ const j=await r.json().catch(()=>({})); throw {msg:r.status===400||r.status===403?`Der YouTube-API-Schlüssel wurde abgelehnt${j?.error?.message?": "+j.error.message:""}.`:`YouTube-API-Fehler ${r.status}.`}; }
       const j=await r.json();
       for(const id of chunk) out.set(id,null);
-      for(const it of j.items||[]) out.set(it.id,{title:it.snippet?.title||"",creator:it.snippet?.channelTitle||"",
+      for(const it of j.items||[]) out.set(it.id,{title:it.snippet?.title||"",creator:it.snippet?.channelTitle||"",channelId:it.snippet?.channelId||"",
         uploadDate:(it.snippet?.publishedAt||"").slice(0,10),duration:isoDur(it.contentDetails?.duration),
         status:it.status?.privacyStatus==="private"?"Privat":"Verfügbar"});
     }
@@ -476,12 +502,14 @@ async function fetchMeta(ids){ // → Map id → {title,creator,uploadDate,durat
 function render(){
   buildIndex();
   document.querySelectorAll("#tabs button").forEach(b=>{ b.classList.toggle("on",b.dataset.view===S.view); b.setAttribute("aria-selected",b.dataset.view===S.view); });
-  $("#addBtn").textContent=S.view==="series"?"+ Reihe":"+ Video";
-  $("#sortWrap").hidden=S.view==="series"||S.f.series.size===1;
+  $("#addBtn").textContent=S.view==="series"?"+ Reihe":S.view==="feed"?"Kanäle":"+ Video";
+  $("#sortWrap").hidden=S.view!=="videos"||S.f.series.size===1;
+  const fc=$("#feedcount"), nf=S.view==="feed"?0:newFeedCount(); fc.hidden=!nf; fc.textContent=nf>99?"99+":nf;
   $("#count").textContent=[S.videos.size?plur(S.videos.size,"Video","Videos"):"",S.series.size?plur(S.series.size,"Reihe","Reihen"):""].filter(Boolean).join(" · ");
   if(S.view==="series"){ renderSeriesRail(); renderSeriesActive(); renderSeriesGrid(); }
+  else if(S.view==="feed"){ renderFeedRail(); renderFeedActive(); renderFeedGrid(); }
   else { renderRail(); renderActive(); renderGrid(); }
-  if(S.openId) renderDrawer(); else if(S.openSeries) renderSeriesDrawer();
+  if(S.openId) renderDrawer(); else if(S.openSeries) renderSeriesDrawer(); else if(S.openFeed) renderFeedDrawer();
 }
 
 function facetCounts(key,getter){ const m=new Map(); for(const v of S.videos.values()){ if(!matches(v,key)) continue; for(const k of [].concat(getter(v))) if(k) m.set(k,(m.get(k)||0)+1); } return m; }
@@ -547,8 +575,8 @@ function renderGrid(){
 }
 
 /* ================= Detailansicht ================= */
-function openDrawer(id,play){ S.openSeries=null; S.openId=id; S.confirmDel=false; S.playing=!!play; if(play) $("#layer").innerHTML=""; renderDrawer(); }
-function closeLayer(){ S.openId=null; S.openSeries=null; S.playing=false; $("#layer").innerHTML=""; }
+function openDrawer(id,play){ S.openSeries=null; S.openFeed=null; S.openId=id; S.confirmDel=false; S.playing=!!play; if(play) $("#layer").innerHTML=""; renderDrawer(); }
+function closeLayer(){ S.openId=null; S.openSeries=null; S.openFeed=null; S.playing=false; $("#layer").innerHTML=""; }
 function miniHTML(v,attr="data-open"){ return `<button type="button" class="mini" ${attr}="${v.id}">${coverHTML(v,{badges:false})}<span style="min-width:0"><b>${esc(titleOf(v))}</b><small>${esc([v.creator,v.duration?fmtDur(v.duration):""].filter(Boolean).join(" · "))}</small></span></button>`; }
 function renderDrawer(){
   const v=S.videos.get(S.openId); if(!v){ closeLayer(); return; }
@@ -571,7 +599,8 @@ function renderDrawer(){
   </aside>`;
 }
 function drawerRest(v,originals,reacts,row){
-  return `<div><h3 class="dtitle">${esc(titleOf(v))}</h3><div class="hint" style="margin-top:4px">${esc(v.creator||"Creator unbekannt")}</div></div>
+  return `<div><h3 class="dtitle">${esc(titleOf(v))}</h3><div class="hint" style="margin-top:4px">${esc(v.creator||"Creator unbekannt")}</div>
+        ${v.channelId?(S.channels.has(v.channelId)?`<button class="btn ghost follow" style="padding:2px 6px;font-size:12px" data-chrules="${v.channelId}">✓ In deinen Abos · Regeln</button>`:`<button class="btn follow" style="padding:4px 10px;font-size:12px" data-chfollow="${v.channelId}">+ Kanal in Abos aufnehmen</button>`):""}</div>
       <div class="actions">
         <a class="btn primary" href="${ytUrl(v.id)}" target="_blank" rel="noopener">Auf YouTube öffnen ↗</a>
         <button class="btn" data-toggle-watched>${v.watched?"Als ungesehen markieren":"Als gesehen markieren"}</button>
@@ -618,7 +647,7 @@ function updateSeries(id,patch){ const x=S.series.get(id); if(!x) return; S.seri
 function moveInSeries(sid,vid,dir){ const x=S.series.get(sid); const a=[...x.videoIds]; const i=a.indexOf(vid), j=i+dir; if(i<0||j<0||j>=a.length) return; [a[i],a[j]]=[a[j],a[i]]; updateSeries(sid,{videoIds:a}); }
 function newVideo(id,m,def,offset=0){
   const now=Date.now()+offset;
-  return {id,title:m?.title||"",creator:m?.creator||"",uploadDate:m?.uploadDate||"",duration:m?.duration||null,
+  return {id,channelId:m?.channelId||"",title:m?.title||"",creator:m?.creator||"",uploadDate:m?.uploadDate||"",duration:m?.duration||null,
     genre:def.genre||"",format:def.format||"",mood:def.mood||"",tags:[...(def.tags||[])],
     status:(m===null||m?.gone)?"Nicht mehr verfügbar":(m?.status||"Verfügbar"),watched:false,notes:"",reactsTo:[],addedAt:now,updatedAt:now};
 }
@@ -850,11 +879,268 @@ function saveSeries(){
   if(needMeta.length) enrichStubs(needMeta);
 }
 
+/* ================= Abos ================= */
+const LS_FEED="vt-feed", LS_FEEDSEEN="vt-feedseen";
+const F={ items:[], fetchedAt:0, loading:false, progress:"", errors:[], seenPrev:lsGet(LS_FEEDSEEN,0),
+  show:"all", ch:new Set(), showHidden:false, chQ:"" };
+(()=>{ const c=lsGet(LS_FEED,null); if(c){ F.items=c.items||[]; F.fetchedAt=c.fetchedAt||0; } })();
+function saveFeedCache(){ lsSet(LS_FEED,{fetchedAt:F.fetchedAt,items:F.items}); }
+const splitWords=t=>(t||"").split(",").map(x=>x.trim().toLowerCase()).filter(Boolean);
+function chRuleSummary(c){ const p=[]; const inc=splitWords(c.include), exc=splitWords(c.exclude);
+  if(inc.length) p.push("nur: "+inc.join(", ")); if(exc.length) p.push("ohne: "+exc.join(", ")); if(c.hideShorts) p.push("keine Shorts"); return p.join(" · "); }
+function passesRules(it){
+  const c=S.channels.get(it.channelId); if(!c) return false;
+  const t=(it.title||"").toLowerCase();
+  const inc=splitWords(c.include); if(inc.length&&!inc.some(w=>t.includes(w))) return false;
+  if(splitWords(c.exclude).some(w=>t.includes(w))) return false;
+  if(c.hideShorts&&it.duration&&it.duration<=180) return false;
+  return true;
+}
+function feedVisible({skipCh}={}){
+  return F.items.filter(it=>{
+    if(!passesRules(it)) return false;
+    if(!F.showHidden&&S.feedHidden[it.id]) return false;
+    if(!skipCh&&F.ch.size&&!F.ch.has(it.channelId)) return false;
+    if(F.show==="new"&&!(Date.parse(it.published)>F.seenPrev)) return false;
+    if(F.show==="notin"&&S.videos.has(it.id)) return false;
+    if(S.q){ const hay=(it.title+" "+it.channelTitle).toLowerCase(); for(const w of S.q.toLowerCase().split(/\s+/).filter(Boolean)) if(!hay.includes(w)) return false; }
+    return true;
+  }).sort((a,b)=>Date.parse(b.published)-Date.parse(a.published));
+}
+function newFeedCount(){ return F.items.filter(it=>passesRules(it)&&!S.feedHidden[it.id]&&!S.videos.has(it.id)&&Date.parse(it.published)>lsGet(LS_FEEDSEEN,0)).length; }
+function dayLabel(iso){
+  const d=new Date(iso), now=new Date(); const day=x=>new Date(x.getFullYear(),x.getMonth(),x.getDate()).getTime();
+  const diff=Math.round((day(now)-day(d))/864e5);
+  if(diff===0) return "Heute"; if(diff===1) return "Gestern";
+  if(diff<7) return d.toLocaleDateString("de-DE",{weekday:"long"});
+  return d.toLocaleDateString("de-DE",{day:"numeric",month:"long",year:d.getFullYear()!==now.getFullYear()?"numeric":undefined});
+}
+function relTime(iso){ const m=Math.round((Date.now()-Date.parse(iso))/6e4); if(m<60) return `vor ${Math.max(m,1)} min`; const h=Math.round(m/60); if(h<24) return `vor ${h} h`; const d=Math.round(h/24); return d===1?"vor 1 Tag":`vor ${d} Tagen`; }
+
+async function refreshFeed(){
+  if(F.loading) return;
+  if(!S.cfg.ytKey){ F.errors=[{msg:"Für die Abos brauchst du den YouTube-API-Schlüssel. Trag ihn in den Einstellungen ein."}]; render(); return; }
+  if(!S.channels.size) return;
+  F.loading=true; F.errors=[]; F.progress="Lade Kanäle …"; renderFeedStatus();
+  const key=encodeURIComponent(S.cfg.ytKey); const chans=[...S.channels.values()]; let done=0;
+  const found=new Map();
+  const one=async c=>{
+    const upl="UU"+c.id.slice(2); const deep=splitWords(c.include).length>0;
+    let page="", pages=0;
+    try{
+      do{ const j=await ytJson(`https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails&maxResults=${deep?50:15}&playlistId=${upl}&key=${key}${page?"&pageToken="+page:""}`);
+        for(const it of j.items||[]){ const id=it.contentDetails?.videoId; if(!id) continue;
+          const t=it.snippet?.title||""; if(t==="Private video"||t==="Deleted video") continue;
+          found.set(id,{id,channelId:c.id,channelTitle:c.title,title:t,desc:(it.snippet?.description||"").slice(0,400),published:it.contentDetails?.videoPublishedAt||it.snippet?.publishedAt}); }
+        page=j.nextPageToken; pages++;
+      }while(deep&&page&&pages<3);
+    }catch(e){ F.errors.push({channel:c.title,msg:e.msg||"Fehler"}); }
+    done++; F.progress=`${done} von ${chans.length} Kanälen geladen …`; renderFeedStatus();
+  };
+  const queue=[...chans]; await Promise.all(Array.from({length:6},async()=>{ while(queue.length) await one(queue.shift()); }));
+  // Dauer und Live-Status nachladen
+  const ids=[...found.keys()];
+  try{ for(let i=0;i<ids.length;i+=50){ const j=await ytJson(`https://www.googleapis.com/youtube/v3/videos?part=contentDetails,snippet&id=${ids.slice(i,i+50).join(",")}&key=${key}`);
+      for(const v of j.items||[]){ const it=found.get(v.id); if(!it) continue; it.duration=isoDur(v.contentDetails?.duration); it.live=v.snippet?.liveBroadcastContent||"none"; } }
+  }catch(e){ F.errors.push({msg:"Dauer konnte nicht geladen werden: "+(e.msg||"")}); }
+  const keep=Date.now()-60*864e5;
+  F.items=[...found.values()].filter(it=>it.live!=="upcoming"&&Date.parse(it.published)>keep).sort((a,b)=>Date.parse(b.published)-Date.parse(a.published)).slice(0,4000);
+  F.fetchedAt=Date.now(); F.loading=false; F.progress="";
+  saveFeedCache(); render();
+}
+function renderFeedStatus(){ const el=$("#feedstatus"); if(el) el.innerHTML=feedStatusHTML(); }
+function feedStatusHTML(){
+  if(F.loading) return `<span class="hint">${esc(F.progress)}</span>`;
+  const errs=F.errors.length?`<span class="hint err">${F.errors[0].channel?`${plur(F.errors.length,"Kanal","Kanäle")} konnte${F.errors.length>1?"n":""} nicht geladen werden (z. B. ${esc(F.errors[0].channel)}: ${esc(F.errors[0].msg)})`:esc(F.errors[0].msg)}</span>`:"";
+  return `${F.fetchedAt?`<span class="hint">Aktualisiert ${relTime(new Date(F.fetchedAt).toISOString())}</span>`:""}<button class="btn" data-feedrefresh ${S.cfg.ytKey&&S.channels.size?"":"disabled"}>Aktualisieren</button>${errs}`;
+}
+
+function renderFeedRail(){
+  const r=$("#rail");
+  if(!S.channels.size){ r.innerHTML=`<p class="hint">Hier erscheinen deine Kanäle, sobald du welche hinzugefügt hast.</p><button class="btn" data-channels>Kanäle verwalten</button>`; return; }
+  const counts=new Map(); for(const it of feedVisible({skipCh:true})) counts.set(it.channelId,(counts.get(it.channelId)||0)+1);
+  let chans=[...S.channels.values()].sort((a,b)=>(counts.get(b.id)||0)-(counts.get(a.id)||0)||a.title.localeCompare(b.title,"de"));
+  if(F.chQ) chans=chans.filter(c=>c.title.toLowerCase().includes(F.chQ.toLowerCase()));
+  r.innerHTML=`<div class="facet"><h3>Anzeigen</h3><div class="opts">
+      ${[["all","Alle Videos"],["new","Nur neue seit letztem Besuch"],["notin","Noch nicht in der Videothek"]].map(([k,l])=>`<button class="opt ${F.show===k?"on":""}" data-fshow="${k}"><span>${l}</span></button>`).join("")}</div>
+      <label class="check" style="padding:6px 8px 0"><input type="checkbox" id="feedHiddenToggle" ${F.showHidden?"checked":""}> Ausgeblendete zeigen</label></div>
+    <div class="facet"><h3>Kanäle${F.ch.size?`<button data-fchclear>zurücksetzen</button>`:""}</h3>
+      ${S.channels.size>8?`<input class="small-in" id="chQ" placeholder="Kanal suchen" value="${esc(F.chQ)}">`:""}
+      <div class="opts">${chans.map(c=>`<button class="opt ${F.ch.has(c.id)?"on":""}" data-fch="${c.id}" title="${esc(chRuleSummary(c))}"><span>${esc(c.title)}${chRuleSummary(c)?' <span class="hint">⚑</span>':""}</span><span class="n">${counts.get(c.id)||0}</span></button>`).join("")||'<span class="hint">Keine Treffer</span>'}</div></div>
+    <button class="btn" data-channels>Kanäle & Regeln verwalten</button>`;
+  const q=$("#chQ"); if(q&&F._focus){ q.focus(); q.setSelectionRange(q.value.length,q.value.length); }
+}
+function renderFeedActive(){
+  const list=feedVisible(); const chips=[];
+  for(const id of F.ch){ const c=S.channels.get(id); if(c) chips.push(`<span class="chip">${esc(c.title)}<button data-fch="${id}" aria-label="Filter entfernen">✕</button></span>`); }
+  if(F.show!=="all") chips.push(`<span class="chip">${F.show==="new"?"Nur neue":"Nicht in Videothek"}<button data-fshow="all" aria-label="Filter entfernen">✕</button></span>`);
+  $("#active").innerHTML=`<span class="hint mono">${plur(list.length,"Video","Videos")}</span>${chips.join("")}`;
+}
+function feedCardHTML(it){
+  const inLib=S.videos.has(it.id), hidden=S.feedHidden[it.id], isNew=Date.parse(it.published)>F.seenPrev;
+  const cv={id:it.id,title:it.title,creator:it.channelTitle,duration:it.duration};
+  return `<div class="card fcard ${hidden?"gone":""}">
+    <button class="fopen" data-feed="${it.id}" aria-label="${esc(it.title)}">${coverHTML(cv,{badges:false}).replace(/<\/div>\s*$/,`<div class="tl">${isNew&&!inLib?'<span class="badge rx">Neu</span>':""}${inLib?'<span class="badge">✓ in Videothek</span>':""}</div><div class="badges">${it.live==="live"?'<span class="badge rx">Live</span>':""}${it.duration?`<span class="badge">${fmtDur(it.duration)}</span>`:""}</div></div>`)}</button>
+    <div class="meta"><span class="t">${esc(it.title)}</span><span class="s">${esc(it.channelTitle)} · ${relTime(it.published)}</span></div>
+    <div class="factions">${inLib?`<button class="btn" data-open="${it.id}">Öffnen</button>`:`<button class="btn" data-fadd="${it.id}">+ Videothek</button>`}
+      <button class="btn ghost" data-fhide="${it.id}">${hidden?"Einblenden":"Ausblenden"}</button></div>
+  </div>`;
+}
+function renderFeedGrid(){
+  const g=$("#grid"); g.style.display="block";
+  const status=`<div class="feedbar" id="feedstatus">${feedStatusHTML()}</div>`;
+  if(!S.channels.size){ g.innerHTML=`<div class="empty"><h2>Noch keine Kanäle</h2>
+    <p>Füge die Kanäle hinzu, die du verfolgen willst, oder importiere alle deine YouTube-Abos auf einmal über Google Takeout. Hier siehst du dann ihre neuesten Videos und übernimmst die interessanten in deine Videothek.</p>
+    <button class="btn primary" data-channels>Kanäle hinzufügen</button></div>`; return; }
+  if(!S.cfg.ytKey){ g.innerHTML=`<div class="empty"><h2>YouTube-API-Schlüssel fehlt</h2><p>Die Abos laden die neuesten Videos deiner Kanäle über die YouTube-API. Trag dafür in den Einstellungen deinen Schlüssel ein.</p><button class="btn primary" data-settings>Einstellungen öffnen</button></div>`; return; }
+  const list=feedVisible();
+  if(!list.length){ g.innerHTML=status+`<div class="empty"><h2>${F.loading?"Lade neue Videos …":F.items.length?"Nichts gefunden":"Noch nichts geladen"}</h2><p>${F.items.length?"Kein Video passt zu den Filtern und Kanal-Regeln.":"Klick auf „Aktualisieren“, um die neuesten Videos deiner Kanäle zu laden."}</p></div>`; return; }
+  let html=status, cur=null, open=false;
+  for(const it of list.slice(0,400)){
+    const lab=dayLabel(it.published);
+    if(lab!==cur){ if(open) html+="</div>"; html+=`<h3 class="dayhead">${esc(lab)}</h3><div class="grid">`; cur=lab; open=true; }
+    html+=feedCardHTML(it);
+  }
+  if(open) html+="</div>";
+  if(list.length>400) html+=`<p class="hint">Die ältesten ${list.length-400} Videos sind ausgeblendet. Filtere nach Kanal, um sie zu sehen.</p>`;
+  g.innerHTML=html;
+}
+function feedAdd(id,{edit}={}){
+  const it=F.items.find(x=>x.id===id); if(!it) return;
+  if(!S.videos.has(id)){
+    const c=S.channels.get(it.channelId)||{};
+    const v=newVideo(id,{title:it.title,creator:it.channelTitle,channelId:it.channelId,uploadDate:(it.published||"").slice(0,10),duration:it.duration||null,status:"Verfügbar"},{genre:c.genre,format:c.format,tags:c.tags||[]});
+    S.videos.set(id,v); S.deleted.delete(id); persist();
+  }
+  if(edit) openEditor(id); else { render(); toast("Als ungesehen in die Videothek übernommen"); }
+}
+function feedHide(id){
+  if(S.feedHidden[id]){ delete S.feedHidden[id]; S.unhidden.add(id); } else { S.feedHidden[id]=Date.now(); S.unhidden.delete(id); }
+  persist(); render();
+}
+function openFeedDrawer(id,play){ S.openId=null; S.openSeries=null; S.openFeed=id; S.playing=!!play; $("#layer").innerHTML=""; renderFeedDrawer(); }
+function renderFeedDrawer(){
+  const it=F.items.find(x=>x.id===S.openFeed); if(!it){ closeLayer(); return; }
+  const inLib=S.videos.has(it.id), c=S.channels.get(it.channelId);
+  const player=S.playing?`<iframe src="https://www.youtube-nocookie.com/embed/${it.id}?autoplay=1&rel=0" title="${esc(it.title)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`
+    :`${coverHTML({id:it.id,title:it.title,creator:it.channelTitle},{badges:false})}<button class="play" data-fplay aria-label="Im Player abspielen"><span><svg width="22" height="22" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg></span></button>`;
+  const rest=`<div><h3 class="dtitle">${esc(it.title)}</h3><div class="hint" style="margin-top:4px">${esc(it.channelTitle)} · ${new Date(it.published).toLocaleDateString("de-DE")}${it.duration?` · ${fmtDur(it.duration)}`:""}</div></div>
+    <div class="actions">${inLib?`<button class="btn primary" data-open="${it.id}">In der Videothek öffnen</button>`:`<button class="btn primary" data-fadd="${it.id}">+ Videothek (ungesehen)</button><button class="btn" data-faddedit="${it.id}">Übernehmen & bearbeiten</button>`}
+      <button class="btn ghost" data-fhide="${it.id}">${S.feedHidden[it.id]?"Wieder einblenden":"Ausblenden"}</button>
+      <a class="btn ghost" href="${ytUrl(it.id)}" target="_blank" rel="noopener">YouTube ↗</a></div>
+    ${it.desc?`<p class="desc">${esc(it.desc)}${it.desc.length>=400?" …":""}</p>`:""}
+    ${c&&(c.genre||(c.tags||[]).length)?`<p class="hint" style="margin:0">Beim Übernehmen bekommt das Video${c.genre?` das Genre „${esc(c.genre)}“`:""}${c.genre&&(c.tags||[]).length?" und":""}${(c.tags||[]).length?` die Tags ${esc(c.tags.join(", "))}`:""} (Einstellung des Kanals).</p>`:""}`;
+  if(S.playing&&$(".player iframe")&&$(".drawer-rest")){ $(".drawer-rest").innerHTML=rest; return; }
+  $("#layer").innerHTML=`<div class="scrim" data-close></div><aside class="drawer" role="dialog" aria-label="Video aus den Abos">
+    <div class="drawer-head"><h2>Aus den Abos</h2><button class="btn ghost" data-close aria-label="Schließen">✕</button></div>
+    <div class="drawer-body"><div class="player">${player}</div><div class="drawer-rest" style="display:flex;flex-direction:column;gap:18px">${rest}</div></div></aside>`;
+}
+
+/* ---------- Kanäle verwalten ---------- */
+async function resolveChannel(input){
+  if(!S.cfg.ytKey) throw {msg:"Zum Hinzufügen von Kanälen brauchst du den YouTube-API-Schlüssel (Einstellungen)."};
+  const key=encodeURIComponent(S.cfg.ytKey); const s=input.trim();
+  let q=null;
+  const idm=s.match(/(UC[\w-]{22})/); if(idm) q="id="+idm[1];
+  if(!q){ const hm=s.match(/@([\w.\-·]+)/); if(hm) q="forHandle="+encodeURIComponent("@"+hm[1]); }
+  if(!q){ const vid=parseId(s); if(vid){ const m=(await fetchMeta([vid])).get(vid); if(m?.channelId) q="id="+m.channelId; } }
+  if(!q&&/^[\w.\-]{3,}$/.test(s)) q="forHandle="+encodeURIComponent("@"+s);
+  if(!q) throw {msg:"Das erkenne ich nicht. Füge die Kanal-URL ein (z. B. youtube.com/@NHL), das @Handle oder die URL eines Videos des Kanals."};
+  const j=await ytJson(`https://www.googleapis.com/youtube/v3/channels?part=snippet&${q}&key=${key}`);
+  const c=j.items?.[0]; if(!c) throw {msg:"Diesen Kanal gibt es nicht. Prüf die Schreibweise des @Handles."};
+  return {id:c.id,title:c.snippet?.title||c.id,handle:c.snippet?.customUrl||""};
+}
+function addChannel(c){
+  const now=Date.now(); const ex=S.channels.get(c.id);
+  S.channels.set(c.id,ex?{...ex,title:c.title||ex.title,updatedAt:now}:{id:c.id,title:c.title,handle:c.handle||"",include:"",exclude:"",hideShorts:false,genre:"",format:"",tags:[],addedAt:now,updatedAt:now});
+  S.deletedChannels.delete(c.id); return !ex;
+}
+function parseTakeoutCsv(text){
+  const out=[]; const seen=new Set();
+  for(const line of text.split(/\r?\n/)){
+    const m=line.match(/(UC[\w-]{22})/); if(!m||seen.has(m[1])) continue; seen.add(m[1]);
+    const cells=[]; let cur="", q=false;
+    for(const ch of line){ if(ch==='"') q=!q; else if(ch===","&&!q){ cells.push(cur); cur=""; } else cur+=ch; }
+    cells.push(cur);
+    out.push({id:m[1],title:(cells[cells.length-1]||m[1]).trim()});
+  }
+  return out;
+}
+let CM=null;
+function openChannels(focusId){
+  CM={q:"",open:focusId||null}; S.openId=null; S.openSeries=null; S.openFeed=null;
+  $("#layer").innerHTML=`<div class="scrim"></div><div class="modal" data-modalbg><div class="sheet" style="width:min(760px,100%)">
+    <div class="sheet-head"><h2>Kanäle & Regeln</h2><button type="button" class="btn ghost" data-close aria-label="Schließen">✕</button></div>
+    <div class="sheet-body">
+      <div class="plbox"><div class="f"><label for="cm-add">Kanal hinzufügen</label>
+        <div class="urlrow"><input type="text" id="cm-add" placeholder="youtube.com/@NHL, @NHL oder URL eines Videos" autocomplete="off" spellcheck="false"><button type="button" class="btn primary" data-cmadd>Hinzufügen</button></div>
+        <span class="hint" id="cm-msg">${S.cfg.ytKey?"":"Zum Hinzufügen brauchst du den YouTube-API-Schlüssel (Einstellungen). Der Takeout-Import geht auch ohne."}</span></div>
+        <div class="actions" style="align-items:center"><label class="btn" for="cm-csv" style="cursor:pointer">Abos aus Google Takeout importieren</label><input type="file" id="cm-csv" accept=".csv,text/csv" hidden>
+        <span class="hint">Datei <span class="mono">subscriptions.csv</span>, Anleitung in der README</span></div></div>
+      ${S.channels.size>6?`<input class="small-in" id="cm-q" placeholder="In ${S.channels.size} Kanälen suchen" style="margin:0">`:""}
+      <p class="hint" style="margin:0"><b>Nur Videos mit</b> und <b>Ohne</b> prüfen den Videotitel, mehrere Begriffe trennst du mit Komma. Groß- und Kleinschreibung ist egal.</p>
+      <div id="cm-list" class="parts"></div>
+    </div>
+    <div class="sheet-foot"><span class="hint">Änderungen werden sofort gespeichert.</span><button type="button" class="btn primary" data-close>Fertig</button></div>
+  </div></div>`;
+  renderChannelList();
+  $("#cm-add").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); cmAdd(); } });
+  $("#cm-q")?.addEventListener("input",e=>{ CM.q=e.target.value; renderChannelList(); });
+  $("#cm-csv").addEventListener("change",async e=>{ const f=e.target.files[0]; if(!f) return; const msg=$("#cm-msg");
+    const list=parseTakeoutCsv(await f.text()); e.target.value="";
+    if(!list.length){ msg.className="hint err"; msg.textContent="In der Datei habe ich keine Kanäle gefunden. Ist es die subscriptions.csv aus Takeout?"; return; }
+    let n=0; for(const c of list) if(addChannel(c)) n++;
+    persist(); renderChannelList(); msg.className="hint ok"; msg.textContent=`${plur(n,"Kanal","Kanäle")} importiert${list.length-n?`, ${list.length-n} waren schon da`:""}.`; F.fetchedAt=0; });
+  if(focusId) setTimeout(()=>document.getElementById("cm-"+focusId)?.scrollIntoView({block:"center"}),50);
+}
+async function cmAdd(){
+  const inp=$("#cm-add"), msg=$("#cm-msg"), btn=$("[data-cmadd]"); if(!inp.value.trim()) return;
+  btn.disabled=true; msg.className="hint"; msg.textContent="Suche Kanal …";
+  try{ const c=await resolveChannel(inp.value); const isNew=addChannel(c); persist(); CM.open=c.id; renderChannelList();
+    msg.className="hint ok"; msg.textContent=isNew?`„${c.title}“ hinzugefügt. Lege unten bei Bedarf Regeln fest.`:`„${c.title}“ ist schon in deiner Liste.`; inp.value=""; F.fetchedAt=0;
+    setTimeout(()=>document.getElementById("cm-"+c.id)?.scrollIntoView({block:"center"}),50);
+  }catch(e){ msg.className="hint err"; msg.textContent=e.msg||"Der Kanal konnte nicht gefunden werden."; }
+  btn.disabled=false;
+}
+function renderChannelList(){
+  const box=$("#cm-list"); if(!box) return;
+  let list=[...S.channels.values()].sort((a,b)=>a.title.localeCompare(b.title,"de"));
+  if(CM.q) list=list.filter(c=>c.title.toLowerCase().includes(CM.q.toLowerCase()));
+  const opt=(arr,val)=>`<option value="">–</option>${[...new Set([...arr,...(val&&!arr.includes(val)?[val]:[])])].map(x=>`<option ${x===val?"selected":""}>${esc(x)}</option>`).join("")}`;
+  box.innerHTML=list.map(c=>`<details class="chrow" id="cm-${c.id}" ${CM.open===c.id?"open":""}>
+    <summary><span class="chname">${esc(c.title)}</span><span class="hint">${esc(chRuleSummary(c)||"alle Videos")}</span></summary>
+    <div class="chbody" data-ch="${c.id}">
+      <div class="row">
+        <div class="f"><label>Nur Videos mit</label><input type="text" data-k="include" value="${esc(c.include)}" placeholder="z. B. Oilers, Edmonton"></div>
+        <div class="f"><label>Ohne</label><input type="text" data-k="exclude" value="${esc(c.exclude)}" placeholder="z. B. Podcast, Livestream"></div>
+      </div>
+      <label class="check" style="padding:0"><input type="checkbox" data-k="hideShorts" ${c.hideShorts?"checked":""}> Shorts ausblenden (Videos bis 3 Minuten)</label>
+      <div class="row">
+        <div class="f"><label>Genre beim Übernehmen</label><select data-k="genre">${opt(S.lists.genres,c.genre)}</select></div>
+        <div class="f"><label>Format beim Übernehmen</label><select data-k="format">${opt(S.lists.formats,c.format)}</select></div>
+        <div class="f"><label>Tags beim Übernehmen</label><input type="text" data-k="tags" value="${esc((c.tags||[]).join(", "))}" placeholder="mit Komma trennen"></div>
+      </div>
+      <div class="actions" style="justify-content:space-between"><a class="btn ghost" href="https://www.youtube.com/channel/${c.id}" target="_blank" rel="noopener">Kanal auf YouTube ↗</a>
+        <button type="button" class="btn ghost danger" data-chdel="${c.id}">Kanal entfernen</button></div>
+    </div></details>`).join("")||`<p class="hint">${S.channels.size?"Kein Kanal passt zur Suche.":"Noch keine Kanäle. Füge oben einen hinzu oder importiere deine Abos."}</p>`;
+}
+let chTimer=null;
+function onChannelField(el){
+  const body=el.closest("[data-ch]"); const id=body.dataset.ch; const c=S.channels.get(id); if(!c) return;
+  const k=el.dataset.k; let val=el.type==="checkbox"?el.checked:el.value;
+  if(k==="tags") val=[...new Set(val.split(",").map(t=>t.trim().toLowerCase().replace(/\s+/g," ")).filter(Boolean))];
+  const deepBefore=splitWords(c.include).length>0;
+  S.channels.set(id,{...c,[k]:val,updatedAt:Date.now()});
+  const sum=body.parentElement.querySelector("summary .hint"); if(sum) sum.textContent=chRuleSummary(S.channels.get(id))||"alle Videos";
+  if(k==="include"&&deepBefore!==(splitWords(val).length>0)) F.fetchedAt=0; // Kanal beim nächsten Mal tiefer laden
+  clearTimeout(chTimer); chTimer=setTimeout(()=>persist(),600);
+}
+
 /* ================= Bearbeiten ================= */
 let E=null;
 function openEditor(id,prefillUrl){
   const v=id?S.videos.get(id):null;
-  E={ isNew:!v, id:v?.id||null, tags:[...(v?.tags||[])], reactsTo:[...(v?.reactsTo||[])], stubs:new Map(), rxQ:"", autoFetched:null };
+  E={ isNew:!v, id:v?.id||null, tags:[...(v?.tags||[])], reactsTo:[...(v?.reactsTo||[])], stubs:new Map(), rxQ:"", autoFetched:null, channelId:v?.channelId||"" };
   S.openId=null; S.playing=false;
   const opt=(list,val)=>`<option value="">–</option>${[...new Set([...list,...(val&&!list.includes(val)?[val]:[])])].map(x=>`<option ${x===val?"selected":""}>${esc(x)}</option>`).join("")}`;
   $("#layer").innerHTML=`<div class="scrim"></div>
@@ -915,6 +1201,7 @@ async function autofill(force){
     const m=(await fetchMeta([id])).get(id);
     if(!m){ $("#e-status").value="Nicht mehr verfügbar"; h.className="hint err"; h.textContent="YouTube kennt dieses Video nicht (mehr) oder es ist privat. Status steht jetzt auf „Nicht mehr verfügbar“."; return; }
     const setIf=(sel,val)=>{ if(val&&(force||!$(sel).value)) $(sel).value=val; };
+    if(m.channelId) E.channelId=m.channelId;
     setIf("#e-title",m.title); setIf("#e-creator",m.creator); setIf("#e-upload",m.uploadDate);
     if(m.duration) setIf("#e-dur",fmtDur(m.duration));
     if(m.status) $("#e-status").value=m.status;
@@ -992,7 +1279,7 @@ async function save(){
   const data={ ...prev, id, title:$("#e-title").value.trim(), creator:$("#e-creator").value.trim(), uploadDate:$("#e-upload").value||"",
     duration:dur, genre:$("#e-genre").value, format:$("#e-format").value, mood:$("#e-mood").value, tags:E.tags,
     status:$("#e-status").value, watched:$("#e-watched").checked, notes:$("#e-notes").value.trim(),
-    reactsTo:E.reactsTo.filter(x=>x!==id), addedAt:prev.addedAt||now, updatedAt:now };
+    reactsTo:E.reactsTo.filter(x=>x!==id), channelId:E.channelId||prev.channelId||"", addedAt:prev.addedAt||now, updatedAt:now };
   const newStubs=[...E.stubs.values()].filter(s=>E.reactsTo.includes(s.id)&&!S.videos.has(s.id));
   for(const s of newStubs) S.videos.set(s.id,{...s,updatedAt:now});
   S.videos.set(id,data); S.deleted.delete(id);
@@ -1002,7 +1289,7 @@ async function save(){
 async function enrichStubs(ids){ // Originale im Hintergrund mit Titel/Creator füllen
   try{ const meta=await fetchMeta(ids); let changed=false;
     for(const [id,m] of meta){ const v=S.videos.get(id); if(!v||v.title) continue;
-      S.videos.set(id,{...v,...(m?{title:m.title,creator:m.creator,uploadDate:m.uploadDate||"",duration:m.duration||null,status:m.status}:{status:"Nicht mehr verfügbar"}),updatedAt:Date.now()}); changed=true; }
+      S.videos.set(id,{...v,...(m?{title:m.title,creator:m.creator,channelId:m.channelId||v.channelId||"",uploadDate:m.uploadDate||"",duration:m.duration||null,status:m.status}:{status:"Nicht mehr verfügbar"}),updatedAt:Date.now()}); changed=true; }
     if(changed){ persist(); render(); }
   }catch(e){}
 }
@@ -1087,6 +1374,7 @@ function openSettings(){
     const file=e.target.files[0]; if(!file) return; const msg=$("#s-msg");
     try{ const d=JSON.parse(await file.text()); if(!Array.isArray(d.videos)) throw 0;
       let n=0; for(const v of d.videos){ if(!v?.id) continue; const cur=S.videos.get(v.id); if(!cur||(v.updatedAt||0)>(cur.updatedAt||0)){ S.videos.set(v.id,v); n++; } }
+      for(const x of d.channels||[]){ if(!x?.id) continue; const cur=S.channels.get(x.id); if(!cur||(x.updatedAt||0)>(cur.updatedAt||0)) S.channels.set(x.id,x); }
       for(const x of d.series||[]){ if(!x?.id) continue; const cur=S.series.get(x.id); if(!cur||(x.updatedAt||0)>(cur.updatedAt||0)) S.series.set(x.id,x); }
       if(d.lists&&(d.listsUpdatedAt||0)>(S.listsUpdatedAt||0)){ S.lists=d.lists; S.listsUpdatedAt=d.listsUpdatedAt; }
       persist(); render(); msg.className="hint ok"; msg.textContent=`${n} Videos importiert oder aktualisiert.`;
@@ -1101,7 +1389,7 @@ function openSettings(){
       for(const [id,m] of meta){ const v=S.videos.get(id); if(!v) continue; const p={};
         if(!m){ if(v.status!=="Nicht mehr verfügbar"){ p.status="Nicht mehr verfügbar"; gone++; } }
         else { if(v.status!==m.status) p.status=m.status;
-          for(const k of ["title","creator","uploadDate","duration"]) if(!v[k]&&m[k]){ p[k]=m[k]; } if(Object.keys(p).some(k=>k!=="status")) filled++; }
+          for(const k of ["title","creator","uploadDate","duration","channelId"]) if(!v[k]&&m[k]){ p[k]=m[k]; } if(Object.keys(p).some(k=>k!=="status")) filled++; }
         if(Object.keys(p).length) S.videos.set(id,{...v,...p,updatedAt:Date.now()}); }
       persist(); render(); msg.className="hint ok"; msg.textContent=`Fertig: ${filled} Videos ergänzt, ${gone} neu als nicht verfügbar markiert.`;
     }catch(e){ msg.className="hint err"; msg.textContent=e.msg||"Die Prüfung hat nicht geklappt."; }
@@ -1116,9 +1404,23 @@ document.addEventListener("click",e=>{
   const t=e.target.closest("button,a,label,[data-close],[data-modalbg]"); if(!t) return;
   const d=t.dataset;
   if(d.modalbg!==undefined){ if(e.target===t) closeLayer(); return; }
-  if(d.close!==undefined){ closeLayer(); return; }
+  if(d.close!==undefined){ closeLayer(); render(); if(S.view==="feed"&&!F.fetchedAt&&S.cfg.ytKey) refreshFeed(); return; }
+  if(d.feed){ openFeedDrawer(d.feed); return; }
+  if(d.fplay!==undefined){ S.playing=true; $(".player").innerHTML=""; renderFeedDrawer(); return; }
+  if(d.fadd){ feedAdd(d.fadd); return; }
+  if(d.faddedit){ feedAdd(d.faddedit,{edit:true}); return; }
+  if(d.fhide){ feedHide(d.fhide); return; }
+  if(d.fshow){ F.show=d.fshow; render(); return; }
+  if(d.fch){ F.ch.has(d.fch)?F.ch.delete(d.fch):F.ch.add(d.fch); render(); return; }
+  if(d.fchclear!==undefined){ F.ch.clear(); render(); return; }
+  if(d.feedrefresh!==undefined){ refreshFeed(); return; }
+  if(d.channels!==undefined){ openChannels(); return; }
+  if(d.chrules){ openChannels(d.chrules); return; }
+  if(d.cmadd!==undefined){ cmAdd(); return; }
+  if(d.chdel){ const c=S.channels.get(d.chdel); S.channels.delete(d.chdel); S.deletedChannels.add(d.chdel); F.ch.delete(d.chdel); persist(); renderChannelList(); toast(`„${c?.title||"Kanal"}“ entfernt`); return; }
+  if(d.chfollow){ const v=S.videos.get(S.openId); addChannel({id:d.chfollow,title:v?.creator||d.chfollow}); persist(); F.fetchedAt=0; render(); toast("Kanal in die Abos aufgenommen"); return; }
   if(d.add!==undefined){ openEditor(); return; }
-  if(d.view){ S.view=d.view; lsSet("vt-view",S.view); closeLayer(); render(); return; }
+  if(d.view){ setView(d.view); return; }
   if(d.series){ openSeriesDrawer(d.series); return; }
   if(d.addseries!==undefined){ openSeriesEditor(); return; }
   if(d.editseries){ openSeriesEditor(d.editseries); return; }
@@ -1161,9 +1463,20 @@ document.addEventListener("click",e=>{
   if(d.newrx){ E.stubs.set(d.newrx,{id:d.newrx,title:"",creator:"",tags:[],reactsTo:[],status:"Verfügbar",watched:false,addedAt:Date.now()}); E.reactsTo.push(d.newrx); E.rxQ=""; renderRx(); return; }
   if(d.rmrx){ E.reactsTo=E.reactsTo.filter(x=>x!==d.rmrx); renderRx(); return; }
 });
-$("#addBtn").addEventListener("click",()=>S.view==="series"?openSeriesEditor():openEditor());
+$("#addBtn").addEventListener("click",()=>S.view==="series"?openSeriesEditor():S.view==="feed"?openChannels():openEditor());
+function setView(v){
+  if(S.view==="feed"&&v!=="feed") lsSet(LS_FEEDSEEN,Date.now());
+  if(v==="feed"&&S.view!=="feed") F.seenPrev=lsGet(LS_FEEDSEEN,0);
+  S.view=v; lsSet("vt-view",v); closeLayer(); render();
+  if(v==="feed"&&S.cfg.ytKey&&S.channels.size&&Date.now()-F.fetchedAt>30*6e4) refreshFeed();
+}
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="hidden"&&S.view==="feed") lsSet(LS_FEEDSEEN,Date.now()); });
+document.addEventListener("input",e=>{ if(e.target.closest?.(".chbody")&&e.target.dataset.k&&e.target.type!=="checkbox"&&e.target.tagName!=="SELECT") onChannelField(e.target);
+  if(e.target.id==="chQ"){ F.chQ=e.target.value; F._focus=true; renderFeedRail(); F._focus=false; } });
 document.addEventListener("change",e=>{
   const t=e.target;
+  if(t.closest?.(".chbody")&&t.dataset.k&&(t.type==="checkbox"||t.tagName==="SELECT")) onChannelField(t);
+  if(t.id==="feedHiddenToggle"){ F.showHidden=t.checked; render(); }
   if(t.dataset.sw){ const v=S.videos.get(t.dataset.sw); if(v) updateVideo(v.id,{watched:t.checked}); }
   if(t.id==="addToSeries"&&t.value){ const vid=S.openId;
     if(t.value==="__new") openSeriesEditor(null,{pick:[vid]});
@@ -1173,7 +1486,7 @@ $("#listsBtn").addEventListener("click",openLists);
 $("#settingsBtn").addEventListener("click",openSettings);
 $("#sync").addEventListener("click",()=>{ if(S.syncState==="err") (S.dirty?push():pull()); else openSettings(); });
 $("#filterToggle").addEventListener("click",()=>$("#rail").classList.toggle("open"));
-$("#q").addEventListener("input",e=>{ S.q=e.target.value.trim(); if(S.view==="series"){ renderSeriesActive(); renderSeriesGrid(); } else { renderActive(); renderGrid(); } });
+$("#q").addEventListener("input",e=>{ S.q=e.target.value.trim(); if(S.view==="series"){ renderSeriesActive(); renderSeriesGrid(); } else if(S.view==="feed"){ renderFeedActive(); renderFeedGrid(); } else { renderActive(); renderGrid(); } });
 $("#sort").value=S.sort;
 $("#sort").addEventListener("change",e=>{ S.sort=e.target.value; lsSet("vt-sort",S.sort); renderGrid(); });
 $("#rail").addEventListener("change",e=>{ if(e.target.id==="inclRx"){ S.f.inclRx=e.target.checked; lsSet("vt-inclrx",S.f.inclRx); render(); } });
@@ -1196,12 +1509,13 @@ const addParam=new URLSearchParams(location.search).get("add");
 (function start(){
   const cache=lsGet(LS_CACHE,null);
   if(cache&&cache.data&&(!GH.ready()||cache.repoKey===repoKey()||!cache.repoKey)){
-    applyData(cache.data); S.sha=cache.sha||null; S.dirty=!!cache.dirty; S.deleted=new Set(cache.deleted||[]); S.deletedSeries=new Set(cache.deletedSeries||[]);
+    applyData(cache.data); S.sha=cache.sha||null; S.dirty=!!cache.dirty; S.deleted=new Set(cache.deleted||[]); S.deletedSeries=new Set(cache.deletedSeries||[]); S.deletedChannels=new Set(cache.deletedChannels||[]); S.unhidden=new Set(cache.unhidden||[]);
     S.loaded=true;
   }
   if(!GH.ready()) S.loaded=true;
   setSync(); showNotice(); render();
-  if(GH.ready()) pull({quiet:!!cache}).then(()=>{ if(S.dirty) push(); });
+  const feedAuto=()=>{ if(S.view==="feed"&&S.cfg.ytKey&&S.channels.size&&Date.now()-F.fetchedAt>30*6e4) refreshFeed(); };
+  if(GH.ready()) pull({quiet:!!cache}).then(()=>{ if(S.dirty) push(); feedAuto(); }); else feedAuto();
   if(addParam&&parseId(addParam)){ history.replaceState(null,"",location.pathname); openEditor(null,addParam); }
 })();
 </script>

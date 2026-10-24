@@ -1,0 +1,853 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Videothek</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: Archiv-Regal. Oben Leiste mit Suche, links Filter-Register, rechts Raster; Details als Seitenschublade. */
+:root{
+  --bg:#eef0f3; --surface:#ffffff; --sunk:#e3e6eb; --ink:#161a22; --muted:#5d6574; --line:#d3d8e0;
+  --accent:#d9480f; --accent-ink:#ffffff; --accent-soft:#fde4d6;
+  --ok:#2b8a3e; --warn:#a61e4d;
+  --cover-l:46%; --cover-s:38%;
+  --f-display:"Familjen Grotesk","Helvetica Neue",Arial,sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  --r:6px; color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#12151b; --surface:#1b2028; --sunk:#232935; --ink:#e8ebf0; --muted:#98a1b0; --line:#2f3644;
+  --accent:#ff7a3d; --accent-ink:#1a0d05; --accent-soft:#3a2216; --ok:#69db7c; --warn:#f783ac;
+  --cover-l:34%; --cover-s:32%; color-scheme:dark}}
+
+*{box-sizing:border-box}
+html{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.45}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--surface)}
+img{max-width:100%}
+[hidden]{display:none!important}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--surface);border-bottom:1px solid var(--line);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:12px}
+.top-in{display:flex;gap:12px;align-items:center;flex-wrap:wrap;max-width:1400px;margin:0 auto}
+.brand{display:flex;align-items:baseline;gap:10px;margin-right:auto}
+.brand h1{font-family:var(--f-display);font-weight:700;font-size:22px;letter-spacing:-.01em;margin:0}
+.brand .count{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.search{flex:1 1 260px;max-width:440px;position:relative}
+.search input{width:100%;padding:9px 12px 9px 34px;border:1px solid var(--line);border-radius:var(--r);background:var(--bg)}
+.search svg{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--muted)}
+.btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface);border-radius:var(--r);padding:8px 12px;font-weight:500;white-space:nowrap;text-decoration:none}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+.btn.primary:hover{filter:brightness(1.06)}
+.btn.ghost{border-color:transparent;background:transparent}
+.btn.ghost:hover{background:var(--sunk)}
+.btn.danger{color:var(--warn)}
+.btn:disabled{opacity:.5;cursor:default}
+.sync{display:inline-flex;align-items:center;gap:6px;border:0;background:none;color:var(--muted);font-size:12px;padding:6px 8px;border-radius:var(--r)}
+.sync:hover{background:var(--sunk)}
+.sync i{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.sync.ok i{background:var(--ok)} .sync.busy i{background:var(--accent);animation:pulse 1s infinite} .sync.err i{background:var(--warn)} .sync.err{color:var(--warn)}
+@keyframes pulse{50%{opacity:.3}}
+.only-narrow{display:none}
+
+.main{display:grid;grid-template-columns:240px minmax(0,1fr);gap:28px;max-width:1400px;margin:0 auto;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px}
+.rail{display:flex;flex-direction:column;gap:20px;align-self:start;position:sticky;top:calc(env(safe-area-inset-top,0px) + 80px);max-height:calc(100vh - 100px);overflow:auto;padding-right:4px}
+.facet h3{font-family:var(--f-mono);font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 6px;display:flex;justify-content:space-between}
+.facet h3 button{border:0;background:none;color:var(--accent);font:inherit;padding:0;text-transform:none;letter-spacing:0}
+.opts{display:flex;flex-direction:column;gap:1px}
+.opt{display:flex;justify-content:space-between;gap:8px;align-items:center;border:0;background:none;text-align:left;padding:5px 8px;border-radius:4px;color:var(--ink)}
+.opt:hover{background:var(--sunk)}
+.opt.on{background:var(--accent-soft);font-weight:600}
+.opt .n{font-family:var(--f-mono);font-size:11px;color:var(--muted)}
+.opt span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tagcloud{display:flex;flex-wrap:wrap;gap:4px}
+.chip{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:2px 9px;font-size:12px;color:var(--ink)}
+button.chip:hover{border-color:var(--muted)}
+.chip.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.seg{display:flex;border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.seg button{flex:1;border:0;background:var(--surface);padding:6px 4px;font-size:12px}
+.seg button.on{background:var(--ink);color:var(--bg)}
+.small-in{width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:4px;background:var(--surface);font-size:13px;margin-bottom:6px}
+
+.bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:16px}
+.active{display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-height:28px}
+.active .chip{background:var(--accent-soft);border-color:transparent}
+.active .chip button{border:0;background:none;padding:0;color:var(--muted);line-height:1}
+.sort{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:13px}
+.sort select{border:1px solid var(--line);border-radius:4px;background:var(--surface);padding:5px 6px}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:22px 18px}
+.card{display:flex;flex-direction:column;gap:8px;border:0;background:none;padding:0;text-align:left;min-width:0}
+.card:hover .cover{transform:translateY(-2px);box-shadow:0 6px 18px -8px rgba(0,0,0,.35)}
+.card.gone .cover img{filter:grayscale(1);opacity:.5}
+.cover{position:relative;aspect-ratio:16/9;max-width:100%;width:100%;border-radius:var(--r);overflow:hidden;transition:transform .15s,box-shadow .15s;
+  background:hsl(var(--h) var(--cover-s) var(--cover-l));color:#fff;display:flex;flex-direction:column;justify-content:space-between;padding:10px 12px 32px}
+.cover::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(135deg,rgba(255,255,255,.06) 0 2px,transparent 2px 9px)}
+.cover > *{position:relative}
+.cover > img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1}
+.cover .ini{font-family:var(--f-display);font-weight:700;font-size:13px;letter-spacing:.04em;text-transform:uppercase;opacity:.85;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.cover .ttl{font-family:var(--f-display);font-weight:600;font-size:17px;line-height:1.15;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;text-wrap:balance}
+.badges{position:absolute;right:8px;bottom:8px;display:flex;gap:4px;z-index:2}
+.badge{font-family:var(--f-mono);font-size:11px;background:rgba(0,0,0,.78);color:#fff;padding:1px 6px;border-radius:3px}
+.tl{position:absolute;right:8px;top:8px;display:flex;gap:4px;z-index:2}
+.badge.rx{background:var(--accent);color:var(--accent-ink)}
+.meta{display:flex;flex-direction:column;gap:2px;min-width:0}
+.meta .t{font-weight:600;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.meta .s{color:var(--muted);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--accent);margin-right:5px;vertical-align:1px}
+
+.empty{border:1.5px dashed var(--line);border-radius:10px;padding:48px 24px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px;color:var(--muted)}
+.empty h2{font-family:var(--f-display);color:var(--ink);font-size:22px;margin:0;text-wrap:balance}
+.empty p{max-width:46ch;margin:0}
+.notice{background:var(--accent-soft);border-radius:var(--r);padding:10px 14px;margin-bottom:16px;font-size:13px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:space-between}
+
+.scrim{position:fixed;inset:0;background:rgba(10,12,16,.45);z-index:20}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(560px,100%);background:var(--surface);z-index:21;display:flex;flex-direction:column;
+  border-left:1px solid var(--line);padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);padding-right:env(safe-area-inset-right,0px)}
+.drawer-head{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--line)}
+.drawer-head h2{font-family:var(--f-display);font-size:15px;margin:0;color:var(--muted);font-weight:600}
+.drawer-body{overflow:auto;padding:18px 20px 32px;display:flex;flex-direction:column;gap:18px}
+.player{position:relative;aspect-ratio:16/9;width:100%;border-radius:var(--r);overflow:hidden;background:#000}
+.player iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+.player .cover{border-radius:0;height:100%}
+.play{position:absolute;inset:0;border:0;background:none;display:flex;align-items:center;justify-content:center;z-index:3}
+.play span{width:64px;height:46px;border-radius:12px;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;transition:background .15s}
+.play:hover span{background:var(--accent)}
+.dtitle{font-family:var(--f-display);font-size:22px;font-weight:700;line-height:1.2;margin:0;text-wrap:balance}
+.actions{display:flex;flex-wrap:wrap;gap:8px}
+dl.props{display:grid;grid-template-columns:110px minmax(0,1fr);gap:8px 12px;margin:0}
+dl.props dt{font-family:var(--f-mono);font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);padding-top:2px}
+dl.props dd{margin:0;min-width:0}
+.notes{white-space:pre-wrap;background:var(--bg);border-radius:var(--r);padding:12px 14px;margin:0}
+.sec h4{font-family:var(--f-mono);font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 8px;font-weight:500}
+.linklist{display:flex;flex-direction:column;gap:6px}
+.mini{display:grid;grid-template-columns:80px minmax(0,1fr);gap:10px;align-items:center;border:1px solid var(--line);background:var(--surface);border-radius:var(--r);padding:6px;text-align:left;width:100%}
+button.mini:hover{border-color:var(--muted)}
+.mini .cover{padding:0;border-radius:3px}
+.mini .cover .ini,.mini .cover .ttl{display:none}
+.mini b{display:block;font-weight:600;font-size:13px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.mini small{color:var(--muted)}
+.confirm{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--bg);padding:10px 12px;border-radius:var(--r)}
+
+.modal{position:fixed;z-index:22;inset:0;display:flex;align-items:flex-start;justify-content:center;overflow:auto;
+  padding-left:max(12px,env(safe-area-inset-left,0px));padding-right:max(12px,env(safe-area-inset-right,0px));padding-block:calc(env(safe-area-inset-top,0px) + 32px) 32px}
+.sheet{background:var(--surface);border-radius:10px;width:min(680px,100%);box-shadow:0 20px 60px -20px rgba(0,0,0,.5);display:flex;flex-direction:column}
+.sheet-head{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--line)}
+.sheet-head h2{font-family:var(--f-display);font-size:19px;margin:0}
+.sheet-body{padding:18px 20px;display:flex;flex-direction:column;gap:16px}
+.sheet-body h3{font-family:var(--f-display);font-size:16px;margin:6px 0 -6px}
+.sheet-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:14px 20px;border-top:1px solid var(--line);flex-wrap:wrap}
+.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.f{display:flex;flex-direction:column;gap:5px;min-width:0}
+.f > label,.f > .lbl{font-family:var(--f-mono);font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+.f input[type=text],.f input[type=url],.f input[type=date],.f input[type=password],.f select,.f textarea{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:var(--r);background:var(--bg)}
+.f textarea{min-height:90px;resize:vertical}
+.hint{font-size:12px;color:var(--muted)}
+.hint.err{color:var(--warn)} .hint.ok{color:var(--ok)}
+.urlrow{display:flex;gap:8px}
+.urlrow input{flex:1;min-width:0}
+.tagbox{display:flex;flex-wrap:wrap;gap:5px;padding:6px;border:1px solid var(--line);border-radius:var(--r);background:var(--bg);align-items:center}
+.tagbox input{flex:1;min-width:120px;border:0;background:transparent;padding:4px}
+.tagbox input:focus{outline:none}
+.tagbox:focus-within{outline:2px solid var(--accent);outline-offset:1px}
+.tagbox .chip button{border:0;background:none;padding:0;color:var(--muted)}
+.sugg{display:flex;flex-wrap:wrap;gap:4px}
+.sugg .chip{border-style:dashed}
+.check{display:flex;gap:8px;align-items:center;padding-top:6px}
+.rxbox{border:1px solid var(--line);border-radius:var(--r);padding:12px;display:flex;flex-direction:column;gap:10px;background:var(--bg)}
+.rxres{display:flex;flex-direction:column;gap:4px;max-height:220px;overflow:auto}
+.rxsel{display:flex;gap:6px;align-items:center}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 20px);background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:999px;z-index:30;font-weight:500}
+hr.sep{border:0;border-top:1px solid var(--line);margin:4px 0}
+
+@media (max-width:820px){
+  .main{grid-template-columns:minmax(0,1fr)}
+  .rail{position:static;max-height:none;display:none;border:1px solid var(--line);border-radius:10px;padding:14px;background:var(--surface)}
+  .rail.open{display:flex}
+  .only-narrow{display:inline-flex}
+  .grid{grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:18px 12px}
+  .cover .ttl{font-size:14px}
+  dl.props{grid-template-columns:90px minmax(0,1fr)}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="top-in">
+    <div class="brand"><h1>Videothek</h1><span class="count mono" id="count"></span></div>
+    <div class="search">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="q" type="search" placeholder="Titel, Creator, Tag, Notiz …" autocomplete="off">
+    </div>
+    <button class="sync" id="sync" title="Speicherstatus und Einstellungen"><i></i><span>…</span></button>
+    <button class="btn only-narrow" id="filterToggle">Filter</button>
+    <button class="btn ghost" id="listsBtn" title="Listen für Genre, Format und Stimmung bearbeiten">Listen</button>
+    <button class="btn ghost" id="settingsBtn">Einstellungen</button>
+    <button class="btn primary" id="addBtn">+ Video</button>
+  </div>
+</header>
+
+<div class="main">
+  <aside class="rail" id="rail"></aside>
+  <section>
+    <div id="notice"></div>
+    <div class="bar">
+      <div class="active" id="active"></div>
+      <label class="sort">Sortieren
+        <select id="sort">
+          <option value="added">Zuletzt hinzugefügt</option>
+          <option value="upload">Upload-Datum</option>
+          <option value="title">Titel A–Z</option>
+          <option value="creator">Creator A–Z</option>
+          <option value="dur">Dauer</option>
+        </select>
+      </label>
+    </div>
+    <div id="grid" class="grid"></div>
+  </section>
+</div>
+
+<div id="layer"></div>
+
+<script>
+"use strict";
+const DEFAULT_LISTS = {
+  genres:["Unterhaltung","Politik","Tech","Medien","Wissen","Gaming","Musik"],
+  formats:["Essay","Kommentar","Reaction","Compilation","Interview","Doku","Tutorial","Podcast"],
+  moods:["Lustig","Nachdenklich","Entspannt","Spannend","Aufregend","Informativ","Bedrückend"]
+};
+const STATUSES = ["Verfügbar","Nicht mehr verfügbar","Privat"];
+const LS_CFG="vt-config", LS_CACHE="vt-cache";
+
+/* ================= Speicher: GitHub + lokaler Cache ================= */
+const lsGet=(k,d)=>{ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):d; }catch(e){ return d; } };
+const lsSet=(k,v)=>{ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} };
+
+function b64ToUtf8(b64){ const bin=atob(b64.replace(/\s/g,"")); const bytes=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i); return new TextDecoder().decode(bytes); }
+function utf8ToB64(str){ const bytes=new TextEncoder().encode(str); let bin=""; for(let i=0;i<bytes.length;i+=0x8000) bin+=String.fromCharCode.apply(null,bytes.subarray(i,i+0x8000)); return btoa(bin); }
+
+const GH = {
+  cfg(){ return S.cfg; },
+  ready(){ const c=S.cfg; return !!(c.owner&&c.repo&&c.token); },
+  url(){ const c=S.cfg; return `https://api.github.com/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/${c.path.split("/").map(encodeURIComponent).join("/")}`; },
+  headers(extra={}){ return {"Authorization":"Bearer "+S.cfg.token,"Accept":"application/vnd.github+json","X-GitHub-Api-Version":"2022-11-28",...extra}; },
+  async read(){
+    const r=await fetch(this.url()+"?ref="+encodeURIComponent(S.cfg.branch)+"&t="+Date.now(),{headers:this.headers(),cache:"no-store"});
+    if(r.status===404){ // Datei fehlt noch oder Repo nicht gefunden
+      const repo=await fetch(`https://api.github.com/repos/${encodeURIComponent(S.cfg.owner)}/${encodeURIComponent(S.cfg.repo)}`,{headers:this.headers(),cache:"no-store"});
+      if(!repo.ok) throw ghErr(repo.status,"repo");
+      return {sha:null,data:null};
+    }
+    if(!r.ok) throw ghErr(r.status);
+    const j=await r.json();
+    let text;
+    if(j.content) text=b64ToUtf8(j.content);
+    else { // > 1 MB: Rohinhalt separat holen
+      const raw=await fetch(this.url()+"?ref="+encodeURIComponent(S.cfg.branch),{headers:this.headers({"Accept":"application/vnd.github.raw+json"}),cache:"no-store"});
+      if(!raw.ok) throw ghErr(raw.status); text=await raw.text();
+    }
+    let data; try{ data=JSON.parse(text); }catch(e){ throw {msg:`${S.cfg.path} im Repo ist kein gültiges JSON. Korrigiere oder lösche die Datei auf GitHub.`}; }
+    return {sha:j.sha,data};
+  },
+  async write(data,sha){
+    const body={message:"Videothek aktualisiert",content:utf8ToB64(JSON.stringify(data,null,1)),branch:S.cfg.branch};
+    if(sha) body.sha=sha;
+    const r=await fetch(this.url(),{method:"PUT",headers:this.headers({"Content-Type":"application/json"}),body:JSON.stringify(body)});
+    if(r.status===409||r.status===422) throw {conflict:true};
+    if(!r.ok) throw ghErr(r.status);
+    const j=await r.json(); return j.content.sha;
+  }
+};
+function ghErr(status,what){
+  const m={401:"Das GitHub-Token ist ungültig oder abgelaufen. Trag in den Einstellungen ein neues ein.",
+    403:"GitHub verweigert den Zugriff. Prüf, ob das Token für dieses Repo die Berechtigung „Contents: Read and write“ hat.",
+    404:what==="repo"?"Repo nicht gefunden. Prüf Besitzer und Repo-Name, und ob das Token Zugriff auf dieses Repo hat.":"Datei oder Branch nicht gefunden. Prüf den Branch-Namen in den Einstellungen."}[status];
+  return {status,msg:m||`GitHub hat mit Fehler ${status} geantwortet. Versuch es gleich noch einmal.`};
+}
+
+function snapshotData(){ return {version:1,updatedAt:Date.now(),listsUpdatedAt:S.listsUpdatedAt||0,lists:S.lists,videos:[...S.videos.values()].sort((a,b)=>(a.addedAt||0)-(b.addedAt||0))}; }
+function applyData(d){
+  S.videos=new Map((d?.videos||[]).filter(v=>v&&v.id).map(v=>[v.id,v]));
+  if(d?.lists) S.lists={genres:d.lists.genres||[],formats:d.lists.formats||[],moods:d.lists.moods||[]};
+  S.listsUpdatedAt=d?.listsUpdatedAt||0;
+}
+function mergeRemote(d){
+  const out=new Map();
+  for(const v of d?.videos||[]) if(v&&v.id&&!S.deleted.has(v.id)) out.set(v.id,v);
+  for(const v of S.videos.values()){ const r=out.get(v.id); if(!r||(v.updatedAt||0)>=(r.updatedAt||0)) out.set(v.id,v); }
+  S.videos=out;
+  if(d?.lists&&(d.listsUpdatedAt||0)>(S.listsUpdatedAt||0)){ S.lists=d.lists; S.listsUpdatedAt=d.listsUpdatedAt; }
+}
+function cacheLocal(){ lsSet(LS_CACHE,{data:snapshotData(),sha:S.sha,dirty:S.dirty,deleted:[...S.deleted],repoKey:repoKey()}); }
+const repoKey=()=>`${S.cfg.owner}/${S.cfg.repo}@${S.cfg.branch}:${S.cfg.path}`;
+
+let pushTimer=null, pushing=false;
+function persist(){ S.dirty=true; cacheLocal(); setSync(); if(!GH.ready()) return; clearTimeout(pushTimer); pushTimer=setTimeout(push,1200); }
+async function push(){
+  if(!GH.ready()||!S.dirty) return;
+  if(pushing){ clearTimeout(pushTimer); pushTimer=setTimeout(push,800); return; }
+  pushing=true; S.syncState="busy"; setSync();
+  try{
+    for(let attempt=0;attempt<3;attempt++){
+      try{ S.sha=await GH.write(snapshotData(),S.sha); S.dirty=false; S.deleted.clear(); S.syncState="ok"; S.syncErr=""; break; }
+      catch(e){ if(!e.conflict||attempt===2) throw e; const remote=await GH.read(); S.sha=remote.sha; mergeRemote(remote.data); render(); }
+    }
+  }catch(e){ S.syncState="err"; S.syncErr=e.msg||"Speichern auf GitHub fehlgeschlagen. Prüf deine Verbindung."; }
+  pushing=false; cacheLocal(); setSync(); showNotice();
+}
+async function pull({quiet}={}){
+  if(!GH.ready()) return;
+  if(!quiet){ S.syncState="busy"; setSync(); }
+  try{
+    const remote=await GH.read();
+    if(S.dirty){ mergeRemote(remote.data); S.sha=remote.sha; persist(); }
+    else if(remote.sha!==S.sha||!quiet){ if(remote.data) applyData(remote.data); else { S.videos=new Map(); } S.sha=remote.sha; }
+    S.syncState=S.dirty?"busy":"ok"; S.syncErr="";
+    if(!remote.sha&&!S.dirty){ S.syncState="ok"; }
+    cacheLocal();
+  }catch(e){ S.syncState="err"; S.syncErr=e.msg||"GitHub ist gerade nicht erreichbar. Deine Änderungen bleiben in diesem Browser gespeichert."; }
+  S.loaded=true; setSync(); showNotice(); render();
+}
+function setSync(){
+  const b=$("#sync"); if(!b) return;
+  let cls="",txt;
+  if(!GH.ready()){ txt="Nur lokal"; }
+  else if(S.syncState==="busy"||(S.dirty&&S.syncState!=="err")){ cls="busy"; txt="Speichert …"; }
+  else if(S.syncState==="err"){ cls="err"; txt="Nicht synchron"; }
+  else { cls="ok"; txt="Synchron"; }
+  b.className="sync "+cls; b.querySelector("span").textContent=txt;
+  b.title=S.syncErr||"Speicherstatus und Einstellungen";
+}
+function showNotice(){
+  const n=$("#notice");
+  if(!GH.ready()) n.innerHTML=`<div class="notice"><span>Die Bibliothek ist noch nicht mit GitHub verbunden und wird nur in diesem Browser gespeichert.</span><button class="btn" data-settings>GitHub verbinden</button></div>`;
+  else if(S.syncState==="err") n.innerHTML=`<div class="notice"><span>${esc(S.syncErr)}</span><span class="actions"><button class="btn" data-retry>Erneut versuchen</button><button class="btn ghost" data-settings>Einstellungen</button></span></div>`;
+  else n.innerHTML="";
+}
+
+/* ================= Zustand & Helfer ================= */
+const S = {
+  videos:new Map(), lists:structuredClone(DEFAULT_LISTS), listsUpdatedAt:0, loaded:false,
+  cfg:Object.assign({owner:"",repo:"",branch:"main",path:"library.json",token:"",ytKey:""},lsGet(LS_CFG,{})),
+  sha:null, dirty:false, deleted:new Set(), syncState:"", syncErr:"",
+  f:{genre:new Set(),format:new Set(),mood:new Set(),creator:new Set(),tags:new Set(),status:new Set(),watched:"all"},
+  q:"", sort:lsGet("vt-sort","added"), creatorQ:"", openId:null, playing:false
+};
+const $ = s=>document.querySelector(s);
+const esc = s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const hash = s=>{let h=0;for(const c of String(s))h=(h*31+c.charCodeAt(0))|0;return Math.abs(h)};
+
+function parseId(input){
+  if(!input) return null;
+  const s=input.trim();
+  if(/^[\w-]{11}$/.test(s)) return s;
+  let u; try{u=new URL(/^https?:/i.test(s)?s:"https://"+s)}catch(e){return null}
+  const h=u.hostname.replace(/^(www|m|music)\./,"");
+  if(h==="youtu.be") return (u.pathname.slice(1).match(/^[\w-]{11}/)||[])[0]||null;
+  if(h==="youtube.com"||h==="youtube-nocookie.com"){
+    const v=u.searchParams.get("v"); if(v&&/^[\w-]{11}$/.test(v)) return v;
+    const m=u.pathname.match(/^\/(?:shorts|embed|live|v)\/([\w-]{11})/); if(m) return m[1];
+  }
+  return null;
+}
+const ytUrl = id=>"https://www.youtube.com/watch?v="+id;
+const thumb = id=>`https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
+function fmtDur(sec){ if(!sec&&sec!==0) return ""; sec=Math.round(sec); const h=Math.floor(sec/3600),m=Math.floor(sec%3600/60),s=sec%60;
+  return h?`${h}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`:`${m}:${String(s).padStart(2,"0")}`; }
+function parseDur(t){ t=(t||"").trim(); if(!t) return null; if(/^\d+$/.test(t)) return +t*60;
+  const p=t.split(":").map(Number); if(p.some(isNaN)||p.length>3) return undefined; return p.reduce((a,b)=>a*60+b,0); }
+function isoDur(s){ const m=/^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/.exec(s||""); if(!m) return null; return (+m[1]||0)*86400+(+m[2]||0)*3600+(+m[3]||0)*60+(+m[4]||0); }
+function fmtDate(d){ if(!d) return ""; const [y,m,dd]=d.split("-"); return dd?`${dd}.${m}.${y}`:d; }
+const titleOf = v=>v.title||"Unbenanntes Video";
+function coverVars(v){ const gi=S.lists.genres.indexOf(v.genre); const h=gi>=0?(gi*47+200)%360:hash(v.creator||v.id)%360; return `--h:${h}`; }
+
+function coverHTML(v,{badges=true}={}){
+  const rx=(v.reactsTo||[]).length, back=reactionsTo(v.id).length;
+  return `<div class="cover" style="${coverVars(v)}">
+    <div class="ini">${esc(v.creator||"–")}</div>
+    <div class="ttl">${esc(titleOf(v))}</div>
+    <img src="${thumb(v.id)}" alt="" loading="lazy" onerror="this.remove()">
+    ${badges?`<div class="tl">${v.watched?'<span class="badge">✓ gesehen</span>':''}${back?`<span class="badge">${back} Reaction${back>1?"s":""}</span>`:''}</div>
+    <div class="badges">${rx?'<span class="badge rx">Reaction</span>':''}${v.status&&v.status!=="Verfügbar"?`<span class="badge">${esc(v.status)}</span>`:''}${v.duration?`<span class="badge">${fmtDur(v.duration)}</span>`:''}</div>`:''}
+  </div>`;
+}
+function reactionsTo(id){ const out=[]; for(const v of S.videos.values()) if((v.reactsTo||[]).includes(id)) out.push(v); return out; }
+function allTags(){ const m=new Map(); for(const v of S.videos.values()) for(const t of v.tags||[]) m.set(t,(m.get(t)||0)+1); return [...m].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])); }
+function allCreators(){ const m=new Map(); for(const v of S.videos.values()) if(v.creator) m.set(v.creator,(m.get(v.creator)||0)+1); return [...m].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])); }
+
+function matches(v,skip){
+  const f=S.f;
+  if(skip!=="genre"&&f.genre.size&&!f.genre.has(v.genre)) return false;
+  if(skip!=="format"&&f.format.size&&!f.format.has(v.format)) return false;
+  if(skip!=="mood"&&f.mood.size&&!f.mood.has(v.mood)) return false;
+  if(skip!=="creator"&&f.creator.size&&!f.creator.has(v.creator)) return false;
+  if(skip!=="status"&&f.status.size&&!f.status.has(v.status||"Verfügbar")) return false;
+  if(skip!=="tags") for(const t of f.tags) if(!(v.tags||[]).includes(t)) return false;
+  if(skip!=="watched"){ if(f.watched==="yes"&&!v.watched) return false; if(f.watched==="no"&&v.watched) return false; }
+  if(S.q){ const hay=[v.title,v.creator,v.genre,v.format,v.mood,v.notes,...(v.tags||[])].join(" ").toLowerCase();
+    for(const w of S.q.toLowerCase().split(/\s+/).filter(Boolean)) if(!hay.includes(w)) return false; }
+  return true;
+}
+function sorted(list){
+  const by={added:(a,b)=>(b.addedAt||0)-(a.addedAt||0), upload:(a,b)=>(b.uploadDate||"").localeCompare(a.uploadDate||""),
+    title:(a,b)=>titleOf(a).localeCompare(titleOf(b),"de"), creator:(a,b)=>(a.creator||"~").localeCompare(b.creator||"~","de")||titleOf(a).localeCompare(titleOf(b),"de"),
+    dur:(a,b)=>(b.duration||0)-(a.duration||0)}[S.sort]||((a,b)=>0);
+  return list.sort(by);
+}
+
+/* ================= Metadaten von YouTube ================= */
+async function fetchMeta(ids){ // → Map id → {title,creator,uploadDate,duration,status} | null (nicht gefunden)
+  const out=new Map();
+  if(S.cfg.ytKey){
+    for(let i=0;i<ids.length;i+=50){
+      const chunk=ids.slice(i,i+50);
+      const r=await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails,status&id=${chunk.join(",")}&key=${encodeURIComponent(S.cfg.ytKey)}`);
+      if(!r.ok){ const j=await r.json().catch(()=>({})); throw {msg:r.status===400||r.status===403?`Der YouTube-API-Schlüssel wurde abgelehnt${j?.error?.message?": "+j.error.message:""}.`:`YouTube-API-Fehler ${r.status}.`}; }
+      const j=await r.json();
+      for(const id of chunk) out.set(id,null);
+      for(const it of j.items||[]) out.set(it.id,{title:it.snippet?.title||"",creator:it.snippet?.channelTitle||"",
+        uploadDate:(it.snippet?.publishedAt||"").slice(0,10),duration:isoDur(it.contentDetails?.duration),
+        status:it.status?.privacyStatus==="private"?"Privat":"Verfügbar"});
+    }
+  } else {
+    for(const id of ids){
+      const r=await fetch(`https://noembed.com/embed?url=${encodeURIComponent(ytUrl(id))}`);
+      if(!r.ok) throw {msg:"Der Metadaten-Dienst ist gerade nicht erreichbar."};
+      const j=await r.json();
+      out.set(id,j.error?null:{title:j.title||"",creator:j.author_name||"",status:"Verfügbar"});
+    }
+  }
+  return out;
+}
+
+/* ================= Rendern ================= */
+function render(){ renderRail(); renderActive(); renderGrid(); if(S.openId) renderDrawer(); }
+
+function facetCounts(key,getter){ const m=new Map(); for(const v of S.videos.values()){ if(!matches(v,key)) continue; const k=getter(v); if(k) m.set(k,(m.get(k)||0)+1); } return m; }
+function facetBlock(title,key,values,counts){
+  const set=S.f[key]; if(!values.length) return "";
+  return `<div class="facet"><h3>${title}${set.size?`<button data-clear="${key}">zurücksetzen</button>`:""}</h3><div class="opts">
+    ${values.map(val=>`<button class="opt ${set.has(val)?"on":""}" data-f="${key}" data-v="${esc(val)}"><span>${esc(val)}</span><span class="n">${counts.get(val)||0}</span></button>`).join("")}
+  </div></div>`;
+}
+function renderRail(){
+  const r=$("#rail"); if(!S.videos.size){ r.innerHTML=`<p class="hint">Filter erscheinen, sobald Videos in der Bibliothek sind.</p>`; return; }
+  const gC=facetCounts("genre",v=>v.genre), fC=facetCounts("format",v=>v.format), mC=facetCounts("mood",v=>v.mood),
+        sC=facetCounts("status",v=>v.status||"Verfügbar"), cC=facetCounts("creator",v=>v.creator);
+  const withExtra=(list,counts)=>[...new Set([...list,...counts.keys()])].filter(x=>list.includes(x)||counts.get(x));
+  let creators=allCreators().map(c=>c[0]);
+  if(S.creatorQ) creators=creators.filter(c=>c.toLowerCase().includes(S.creatorQ.toLowerCase()));
+  const showC=[...new Set([...S.f.creator,...creators.slice(0,10)])];
+  const tagCounts=new Map(); for(const v of S.videos.values()) if(matches(v,"tags")) for(const t of v.tags||[]) tagCounts.set(t,(tagCounts.get(t)||0)+1);
+  const tagList=[...new Set([...S.f.tags,...allTags().map(t=>t[0]).filter(t=>tagCounts.get(t))])].slice(0,30);
+  r.innerHTML=`
+    <div class="facet"><h3>Gesehen</h3><div class="seg">
+      ${[["all","Alle"],["no","Ungesehen"],["yes","Gesehen"]].map(([k,l])=>`<button data-w="${k}" class="${S.f.watched===k?"on":""}">${l}</button>`).join("")}
+    </div></div>
+    ${facetBlock("Genre","genre",withExtra(S.lists.genres,gC),gC)}
+    ${facetBlock("Format","format",withExtra(S.lists.formats,fC),fC)}
+    <div class="facet"><h3>Creator${S.f.creator.size?`<button data-clear="creator">zurücksetzen</button>`:""}</h3>
+      ${allCreators().length>8?`<input class="small-in" id="creatorQ" placeholder="Creator suchen" value="${esc(S.creatorQ)}">`:""}
+      <div class="opts">${showC.map(c=>`<button class="opt ${S.f.creator.has(c)?"on":""}" data-f="creator" data-v="${esc(c)}"><span>${esc(c)}</span><span class="n">${cC.get(c)||0}</span></button>`).join("")||'<span class="hint">Keine Treffer</span>'}</div></div>
+    ${tagList.length?`<div class="facet"><h3>Tags${S.f.tags.size?`<button data-clear="tags">zurücksetzen</button>`:""}</h3><div class="tagcloud">
+      ${tagList.map(t=>`<button class="chip ${S.f.tags.has(t)?"on":""}" data-f="tags" data-v="${esc(t)}">${esc(t)} <span class="mono" style="opacity:.6">${tagCounts.get(t)||0}</span></button>`).join("")}
+    </div></div>`:""}
+    ${facetBlock("Stimmung","mood",withExtra(S.lists.moods,mC),mC)}
+    ${facetBlock("Status","status",STATUSES.filter(s=>sC.get(s)),sC)}`;
+  const cq=$("#creatorQ"); if(cq&&S._focusCreator){ cq.focus(); cq.setSelectionRange(cq.value.length,cq.value.length); }
+}
+function renderActive(){
+  const chips=[];
+  for(const k of ["genre","format","creator","tags","mood","status"]) for(const v of S.f[k]) chips.push(`<span class="chip">${esc(v)}<button data-rm="${k}" data-v="${esc(v)}" aria-label="Filter entfernen">✕</button></span>`);
+  if(S.f.watched!=="all") chips.push(`<span class="chip">${S.f.watched==="yes"?"Gesehen":"Ungesehen"}<button data-rmw aria-label="Filter entfernen">✕</button></span>`);
+  const n=[...S.videos.values()].filter(v=>matches(v)).length;
+  $("#active").innerHTML=`<span class="hint mono">${n} von ${S.videos.size}</span>${chips.join("")}${chips.length?`<button class="btn ghost" data-clearall style="padding:3px 8px;font-size:12px">Alle Filter löschen</button>`:""}`;
+  $("#count").textContent=S.videos.size?`${S.videos.size} Videos`:"";
+}
+function renderGrid(){
+  const g=$("#grid");
+  if(!S.loaded){ g.style.display="block"; g.innerHTML=`<p class="hint">Bibliothek wird geladen …</p>`; return; }
+  if(!S.videos.size){ g.style.display="block"; g.innerHTML=`<div class="empty">
+      <h2>Deine Bibliothek ist noch leer</h2>
+      <p>Füge die URL eines YouTube-Videos ein. Danach vergibst du Genre, Format, Tags und Stimmung, und kannst Reactions mit ihren Originalen verknüpfen.</p>
+      <button class="btn primary" data-add>+ Erstes Video hinzufügen</button></div>`; return; }
+  const list=sorted([...S.videos.values()].filter(v=>matches(v)));
+  if(!list.length){ g.style.display="block"; g.innerHTML=`<div class="empty"><h2>Nichts gefunden</h2><p>Kein Video passt zu Suche und Filtern.</p><button class="btn" data-clearall>Filter zurücksetzen</button></div>`; return; }
+  g.style.display="";
+  g.innerHTML=list.map(v=>`<button class="card ${v.status&&v.status!=="Verfügbar"?"gone":""}" data-open="${v.id}">
+    ${coverHTML(v)}
+    <div class="meta"><span class="t">${v.watched?"":'<span class="dot" title="ungesehen"></span>'}${esc(titleOf(v))}</span>
+    <span class="s">${esc([v.creator,v.format,v.genre].filter(Boolean).join(" · ")||"Details fehlen noch")}</span></div>
+  </button>`).join("");
+}
+
+/* ================= Detailansicht ================= */
+function openDrawer(id){ S.openId=id; S.confirmDel=false; S.playing=false; renderDrawer(); }
+function closeLayer(){ S.openId=null; S.playing=false; $("#layer").innerHTML=""; }
+function miniHTML(v,attr="data-open"){ return `<button type="button" class="mini" ${attr}="${v.id}">${coverHTML(v,{badges:false})}<span style="min-width:0"><b>${esc(titleOf(v))}</b><small>${esc([v.creator,v.duration?fmtDur(v.duration):""].filter(Boolean).join(" · "))}</small></span></button>`; }
+function renderDrawer(){
+  const v=S.videos.get(S.openId); if(!v){ closeLayer(); return; }
+  const originals=(v.reactsTo||[]).map(id=>S.videos.get(id)).filter(Boolean);
+  const reacts=reactionsTo(v.id);
+  const row=(k,val)=>val?`<dt>${k}</dt><dd>${val}</dd>`:"";
+  const keepPlayer=S.playing&&$(".player iframe");
+  const playerHTML=S.playing?`<iframe src="https://www.youtube-nocookie.com/embed/${v.id}?autoplay=1&rel=0" title="${esc(titleOf(v))}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`
+    :`${coverHTML(v,{badges:false})}<button class="play" data-play aria-label="Im Player abspielen"><span><svg width="22" height="22" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg></span></button>`;
+  if(keepPlayer){ // Player nicht neu laden, nur Rest aktualisieren
+    $(".drawer-rest").innerHTML=drawerRest(v,originals,reacts,row); return;
+  }
+  $("#layer").innerHTML=`<div class="scrim" data-close></div>
+  <aside class="drawer" role="dialog" aria-label="Videodetails">
+    <div class="drawer-head"><h2>${esc(v.format||"Video")}</h2><button class="btn ghost" data-close aria-label="Schließen">✕</button></div>
+    <div class="drawer-body">
+      <div class="player">${playerHTML}</div>
+      <div class="drawer-rest" style="display:flex;flex-direction:column;gap:18px">${drawerRest(v,originals,reacts,row)}</div>
+    </div>
+  </aside>`;
+}
+function drawerRest(v,originals,reacts,row){
+  return `<div><h3 class="dtitle">${esc(titleOf(v))}</h3><div class="hint" style="margin-top:4px">${esc(v.creator||"Creator unbekannt")}</div></div>
+      <div class="actions">
+        <a class="btn primary" href="${ytUrl(v.id)}" target="_blank" rel="noopener">Auf YouTube öffnen ↗</a>
+        <button class="btn" data-toggle-watched>${v.watched?"Als ungesehen markieren":"Als gesehen markieren"}</button>
+        <button class="btn" data-edit="${v.id}">Bearbeiten</button>
+      </div>
+      ${!v.title?`<div class="notice">Dieses Video wurde als Original einer Reaction angelegt. Ergänze die Details über „Bearbeiten“.</div>`:""}
+      <dl class="props">
+        ${row("Genre",esc(v.genre))}${row("Format",esc(v.format))}${row("Stimmung",esc(v.mood))}
+        ${row("Dauer",v.duration?`<span class="mono">${fmtDur(v.duration)}</span>`:"")}
+        ${row("Upload",v.uploadDate?`<span class="mono">${fmtDate(v.uploadDate)}</span>`:"")}
+        ${row("Status",esc(v.status||"Verfügbar"))}
+        ${row("Tags",(v.tags||[]).length?`<div class="tagcloud">${v.tags.map(t=>`<button class="chip" data-tagfilter="${esc(t)}">${esc(t)}</button>`).join("")}</div>`:"")}
+        ${row("Hinzugefügt",v.addedAt?`<span class="mono">${new Date(v.addedAt).toLocaleDateString("de-DE")}</span>`:"")}
+        ${row("Video-ID",`<span class="mono">${esc(v.id)}</span>`)}
+      </dl>
+      ${v.notes?`<div class="sec"><h4>Notizen</h4><p class="notes">${esc(v.notes)}</p></div>`:""}
+      ${originals.length?`<div class="sec"><h4>Reaction auf</h4><div class="linklist">${originals.map(o=>miniHTML(o)).join("")}</div></div>`:""}
+      ${reacts.length?`<div class="sec"><h4>Reactions auf dieses Video (${reacts.length})</h4><div class="linklist">${reacts.map(o=>miniHTML(o)).join("")}</div></div>`:""}
+      <div>${S.confirmDel?`<div class="confirm"><span>Video endgültig aus der Bibliothek löschen?</span><button class="btn danger" data-del-yes>Löschen</button><button class="btn ghost" data-del-no>Abbrechen</button></div>`
+        :`<button class="btn ghost danger" data-del>Aus Bibliothek löschen</button>`}</div>`;
+}
+
+/* ================= Bearbeiten ================= */
+let E=null;
+function openEditor(id,prefillUrl){
+  const v=id?S.videos.get(id):null;
+  E={ isNew:!v, id:v?.id||null, tags:[...(v?.tags||[])], reactsTo:[...(v?.reactsTo||[])], stubs:new Map(), rxQ:"", autoFetched:null };
+  S.openId=null; S.playing=false;
+  const opt=(list,val)=>`<option value="">–</option>${[...new Set([...list,...(val&&!list.includes(val)?[val]:[])])].map(x=>`<option ${x===val?"selected":""}>${esc(x)}</option>`).join("")}`;
+  $("#layer").innerHTML=`<div class="scrim"></div>
+  <div class="modal" data-modalbg><form class="sheet" id="ed" novalidate>
+    <div class="sheet-head"><h2>${v?"Video bearbeiten":"Video hinzufügen"}</h2><button type="button" class="btn ghost" data-close aria-label="Schließen">✕</button></div>
+    <div class="sheet-body">
+      <div class="f"><label for="e-url">YouTube-URL</label>
+        <div class="urlrow"><input type="url" id="e-url" placeholder="https://www.youtube.com/watch?v=…" value="${esc(v?ytUrl(v.id):prefillUrl||"")}" ${v?"readonly":""}>
+        <button type="button" class="btn" id="e-fetch">Daten holen</button></div>
+        <div class="hint" id="e-urlhint">${v?"Die URL bleibt fest. Zum Ändern das Video löschen und neu anlegen.":S.cfg.ytKey?"Titel, Creator, Upload und Dauer werden beim Einfügen automatisch geholt.":"Titel und Creator werden beim Einfügen automatisch geholt."}</div>
+      </div>
+      <div class="f"><label for="e-title">Titel</label><input type="text" id="e-title" value="${esc(v?.title)}"></div>
+      <div class="row">
+        <div class="f"><label for="e-creator">Creator</label><input type="text" id="e-creator" list="dl-creators" value="${esc(v?.creator)}" autocomplete="off">
+          <datalist id="dl-creators">${allCreators().map(c=>`<option value="${esc(c[0])}">`).join("")}</datalist></div>
+        <div class="f"><label for="e-upload">Upload</label><input type="date" id="e-upload" value="${esc(v?.uploadDate)}"></div>
+        <div class="f"><label for="e-dur">Dauer</label><input type="text" id="e-dur" class="mono" placeholder="12:34" value="${v?.duration?fmtDur(v.duration):""}"></div>
+      </div>
+      <div class="row">
+        <div class="f"><label for="e-genre">Genre</label><select id="e-genre">${opt(S.lists.genres,v?.genre)}</select></div>
+        <div class="f"><label for="e-format">Format</label><select id="e-format">${opt(S.lists.formats,v?.format)}</select></div>
+        <div class="f"><label for="e-mood">Stimmung</label><select id="e-mood">${opt(S.lists.moods,v?.mood)}</select></div>
+      </div>
+      <div class="f"><span class="lbl">Tags</span><div class="tagbox" id="e-tagbox"></div><div class="sugg" id="e-sugg"></div></div>
+      <div id="e-rx"></div>
+      <div class="row">
+        <div class="f"><label for="e-status">Status</label><select id="e-status">${STATUSES.map(s=>`<option ${s===(v?.status||"Verfügbar")?"selected":""}>${s}</option>`).join("")}</select></div>
+        <div class="f"><span class="lbl">Gesehen</span><label class="check"><input type="checkbox" id="e-watched" ${v?.watched?"checked":""}> Schon angeschaut</label></div>
+      </div>
+      <div class="f"><label for="e-notes">Notizen</label><textarea id="e-notes" placeholder="Was war gut, worum ging es, wer hat’s empfohlen …">${esc(v?.notes)}</textarea></div>
+    </div>
+    <div class="sheet-foot"><span class="hint err" id="e-err"></span><div class="actions"><button type="button" class="btn ghost" data-close>Abbrechen</button><button type="submit" class="btn primary">${v?"Speichern":"Hinzufügen"}</button></div></div>
+  </form></div>`;
+  renderTags(); renderRx();
+  const url=$("#e-url");
+  if(!v){ url.focus(); url.addEventListener("input",checkUrl); if(prefillUrl) checkUrl(); } else $("#e-title").focus();
+  $("#e-format").addEventListener("change",renderRx);
+  $("#e-fetch").addEventListener("click",()=>autofill(true));
+  $("#ed").addEventListener("submit",e=>{e.preventDefault();save();});
+}
+function checkUrl(){
+  const id=parseId($("#e-url").value), h=$("#e-urlhint");
+  if(!$("#e-url").value.trim()){ h.className="hint"; h.textContent="Füge eine YouTube-URL ein."; return; }
+  if(!id){ h.className="hint err"; h.textContent="Das sieht nicht nach einer YouTube-Video-URL aus."; return; }
+  const ex=S.videos.get(id);
+  if(ex&&ex.title){ h.className="hint err"; h.innerHTML=`Schon in der Bibliothek: „${esc(ex.title)}“. <button type="button" class="btn ghost" style="padding:0 4px;color:var(--accent)" data-open="${id}">Öffnen</button>`; return; }
+  h.className="hint ok"; h.textContent=ex?"Dieses Video existiert schon als Original-Platzhalter und wird jetzt vervollständigt.":`Video-ID ${id} erkannt.`;
+  if(E.autoFetched!==id){ E.autoFetched=id; autofill(false); }
+  renderRxRes();
+}
+async function autofill(force){
+  const id=E.id||parseId($("#e-url").value), btn=$("#e-fetch"), h=$("#e-urlhint");
+  if(!id){ h.className="hint err"; h.textContent="Zuerst eine gültige YouTube-URL einfügen."; return; }
+  btn.disabled=true; btn.textContent="Hole …";
+  try{
+    const m=(await fetchMeta([id])).get(id);
+    if(!m){ $("#e-status").value="Nicht mehr verfügbar"; h.className="hint err"; h.textContent="YouTube kennt dieses Video nicht (mehr) oder es ist privat. Status steht jetzt auf „Nicht mehr verfügbar“."; return; }
+    const setIf=(sel,val)=>{ if(val&&(force||!$(sel).value)) $(sel).value=val; };
+    setIf("#e-title",m.title); setIf("#e-creator",m.creator); setIf("#e-upload",m.uploadDate);
+    if(m.duration) setIf("#e-dur",fmtDur(m.duration));
+    if(m.status) $("#e-status").value=m.status;
+    h.className="hint ok"; h.textContent=S.cfg.ytKey?"Daten von YouTube übernommen.":"Titel und Creator übernommen. Für Upload-Datum und Dauer hinterlege einen YouTube-API-Schlüssel in den Einstellungen.";
+  }catch(e){ h.className="hint err"; h.textContent=(e.msg||"Die Videodaten konnten nicht geholt werden.")+" Du kannst die Felder auch von Hand ausfüllen."; }
+  finally{ btn.disabled=false; btn.textContent="Daten holen"; }
+}
+function renderTags(){
+  const box=$("#e-tagbox"); if(!box) return;
+  box.innerHTML=E.tags.map(t=>`<span class="chip">${esc(t)}<button type="button" data-rmtag="${esc(t)}" aria-label="Tag entfernen">✕</button></span>`).join("")+`<input id="e-tagin" placeholder="${E.tags.length?"":"Tag eingeben, Enter zum Hinzufügen"}" autocomplete="off">`;
+  const inp=$("#e-tagin");
+  inp.addEventListener("keydown",e=>{
+    if((e.key==="Enter"||e.key===",")&&inp.value.trim()){ e.preventDefault(); addTag(inp.value); }
+    else if(e.key==="Enter") e.preventDefault();
+    else if(e.key==="Backspace"&&!inp.value&&E.tags.length){ E.tags.pop(); renderTags(); $("#e-tagin").focus(); }
+  });
+  inp.addEventListener("input",renderSugg);
+  renderSugg();
+}
+function renderSugg(){
+  const q=($("#e-tagin")?.value||"").trim().toLowerCase();
+  const list=allTags().map(t=>t[0]).filter(t=>!E.tags.includes(t)&&(!q||t.includes(q))).slice(0,q?12:10);
+  $("#e-sugg").innerHTML=list.length?`<span class="hint" style="align-self:center">${q?"Vorhandene Tags:":"Häufig benutzt:"}</span>`+list.map(t=>`<button type="button" class="chip" data-addtag="${esc(t)}">+ ${esc(t)}</button>`).join(""):"";
+}
+function addTag(raw){ const t=raw.replace(/,/g," ").trim().toLowerCase().replace(/\s+/g," "); if(t&&!E.tags.includes(t)) E.tags.push(t); renderTags(); $("#e-tagin").focus(); }
+
+function renderRx(){
+  const wrap=$("#e-rx"); if(!wrap) return;
+  if(!($("#e-format").value==="Reaction"||E.reactsTo.length)){ wrap.innerHTML=""; return; }
+  wrap.innerHTML=`<div class="f"><span class="lbl">Reaction auf</span><div class="rxbox">
+    <div class="linklist">${E.reactsTo.map(id=>{const o=S.videos.get(id)||E.stubs.get(id)||{id};
+      const shown={...o,title:o.title||(E.stubs.has(id)?"Neues Original (wird mit angelegt)":"")};
+      return `<div class="rxsel">${miniHTML(shown,"data-noop")}<button type="button" class="btn ghost" data-rmrx="${id}" aria-label="Verknüpfung entfernen">✕</button></div>`}).join("")||'<span class="hint">Noch kein Original verknüpft.</span>'}</div>
+    <input class="small-in" id="e-rxq" placeholder="Original suchen oder dessen YouTube-URL einfügen" value="${esc(E.rxQ)}" autocomplete="off" style="margin:0">
+    <div class="rxres" id="e-rxres"></div>
+  </div></div>`;
+  const q=$("#e-rxq"); q.addEventListener("input",()=>{E.rxQ=q.value;renderRxRes();}); renderRxRes();
+}
+function renderRxRes(){
+  const box=$("#e-rxres"); if(!box) return; const q=E.rxQ.trim(); const selfId=E.id||parseId($("#e-url").value);
+  if(!q){ box.innerHTML=""; return; }
+  const pid=parseId(q);
+  if(pid&&/youtu|^[\w-]{11}$/.test(q)){
+    if(pid===selfId){ box.innerHTML=`<span class="hint err">Ein Video kann nicht auf sich selbst reagieren.</span>`; return; }
+    if(E.reactsTo.includes(pid)){ box.innerHTML=`<span class="hint">Schon verknüpft.</span>`; return; }
+    const ex=S.videos.get(pid);
+    box.innerHTML=ex?miniHTML(ex,"data-pickrx"):`<button type="button" class="btn" data-newrx="${pid}">Als neues Original anlegen und verknüpfen</button>`;
+    return;
+  }
+  const words=q.toLowerCase().split(/\s+/);
+  const res=[...S.videos.values()].filter(v=>v.id!==selfId&&!E.reactsTo.includes(v.id)&&words.every(w=>[v.title,v.creator,...(v.tags||[])].join(" ").toLowerCase().includes(w))).slice(0,8);
+  box.innerHTML=res.length?res.map(v=>miniHTML(v,"data-pickrx")).join(""):`<span class="hint">Kein passendes Video. Füge die URL des Originals ein, um es neu anzulegen.</span>`;
+}
+
+async function save(){
+  const err=$("#e-err"); err.textContent="";
+  const id=E.id||parseId($("#e-url").value);
+  if(!id){ err.textContent="Bitte eine gültige YouTube-URL einfügen."; $("#e-url").focus(); return; }
+  if(E.isNew&&S.videos.get(id)?.title){ err.textContent="Dieses Video ist schon in deiner Bibliothek."; return; }
+  const pending=$("#e-tagin")?.value.trim(); if(pending) addTag(pending);
+  const dur=parseDur($("#e-dur").value); if(dur===undefined){ err.textContent="Dauer bitte als mm:ss oder h:mm:ss angeben."; $("#e-dur").focus(); return; }
+  const prev=S.videos.get(id)||{}; const now=Date.now();
+  const data={ ...prev, id, title:$("#e-title").value.trim(), creator:$("#e-creator").value.trim(), uploadDate:$("#e-upload").value||"",
+    duration:dur, genre:$("#e-genre").value, format:$("#e-format").value, mood:$("#e-mood").value, tags:E.tags,
+    status:$("#e-status").value, watched:$("#e-watched").checked, notes:$("#e-notes").value.trim(),
+    reactsTo:E.reactsTo.filter(x=>x!==id), addedAt:prev.addedAt||now, updatedAt:now };
+  const newStubs=[...E.stubs.values()].filter(s=>E.reactsTo.includes(s.id)&&!S.videos.has(s.id));
+  for(const s of newStubs) S.videos.set(s.id,{...s,updatedAt:now});
+  S.videos.set(id,data); S.deleted.delete(id);
+  persist(); closeLayer(); render(); toast(E.isNew?"Hinzugefügt":"Gespeichert"); openDrawer(id);
+  if(newStubs.length) enrichStubs(newStubs.map(s=>s.id));
+}
+async function enrichStubs(ids){ // Originale im Hintergrund mit Titel/Creator füllen
+  try{ const meta=await fetchMeta(ids); let changed=false;
+    for(const [id,m] of meta){ const v=S.videos.get(id); if(!v||v.title) continue;
+      S.videos.set(id,{...v,...(m?{title:m.title,creator:m.creator,uploadDate:m.uploadDate||"",duration:m.duration||null,status:m.status}:{status:"Nicht mehr verfügbar"}),updatedAt:Date.now()}); changed=true; }
+    if(changed){ persist(); render(); }
+  }catch(e){}
+}
+function updateVideo(id,patch){ const v=S.videos.get(id); if(!v) return; S.videos.set(id,{...v,...patch,updatedAt:Date.now()}); persist(); render(); }
+function removeVideo(id){
+  S.videos.delete(id); S.deleted.add(id);
+  for(const v of [...S.videos.values()]) if((v.reactsTo||[]).includes(id)) S.videos.set(v.id,{...v,reactsTo:v.reactsTo.filter(x=>x!==id),updatedAt:Date.now()});
+  persist(); render();
+}
+
+/* ================= Listen ================= */
+function openLists(){
+  $("#layer").innerHTML=`<div class="scrim"></div><div class="modal" data-modalbg><form class="sheet" id="lf">
+    <div class="sheet-head"><h2>Listen bearbeiten</h2><button type="button" class="btn ghost" data-close aria-label="Schließen">✕</button></div>
+    <div class="sheet-body"><p class="hint" style="margin:0">Ein Eintrag pro Zeile. Videos, die einen entfernten Wert tragen, behalten ihn.</p>
+      <div class="row">${[["genres","Genre"],["formats","Format"],["moods","Stimmung"]].map(([k,l])=>`<div class="f"><label for="l-${k}">${l}</label><textarea id="l-${k}" style="min-height:190px">${esc(S.lists[k].join("\n"))}</textarea></div>`).join("")}</div>
+      <p class="hint" style="margin:0">Die Verknüpfung mit Originalen erscheint bei Videos im Format „Reaction“.</p></div>
+    <div class="sheet-foot"><span></span><div class="actions"><button type="button" class="btn ghost" data-close>Abbrechen</button><button class="btn primary" type="submit">Speichern</button></div></div>
+  </form></div>`;
+  $("#lf").addEventListener("submit",e=>{ e.preventDefault();
+    const read=k=>[...new Set($("#l-"+k).value.split("\n").map(s=>s.trim()).filter(Boolean))];
+    S.lists={genres:read("genres"),formats:read("formats"),moods:read("moods")}; S.listsUpdatedAt=Date.now();
+    persist(); closeLayer(); render(); toast("Listen gespeichert"); });
+}
+
+/* ================= Einstellungen ================= */
+function openSettings(){
+  const c=S.cfg;
+  $("#layer").innerHTML=`<div class="scrim"></div><div class="modal" data-modalbg><form class="sheet" id="sf" novalidate>
+    <div class="sheet-head"><h2>Einstellungen</h2><button type="button" class="btn ghost" data-close aria-label="Schließen">✕</button></div>
+    <div class="sheet-body">
+      <h3>GitHub-Speicher</h3>
+      <p class="hint" style="margin:0">Die Bibliothek liegt als JSON-Datei in einem GitHub-Repo, am besten einem privaten. Token und Schlüssel bleiben nur in diesem Browser.</p>
+      <div class="row">
+        <div class="f"><label for="s-owner">Besitzer</label><input type="text" id="s-owner" value="${esc(c.owner)}" placeholder="dein-github-name" autocomplete="off" spellcheck="false"></div>
+        <div class="f"><label for="s-repo">Daten-Repo</label><input type="text" id="s-repo" value="${esc(c.repo)}" placeholder="videothek-daten" autocomplete="off" spellcheck="false"></div>
+      </div>
+      <div class="row">
+        <div class="f"><label for="s-branch">Branch</label><input type="text" id="s-branch" value="${esc(c.branch)}" spellcheck="false"></div>
+        <div class="f"><label for="s-path">Datei</label><input type="text" id="s-path" value="${esc(c.path)}" spellcheck="false"></div>
+      </div>
+      <div class="f"><label for="s-token">GitHub-Token</label><input type="password" id="s-token" value="${esc(c.token)}" placeholder="github_pat_…" autocomplete="off" spellcheck="false">
+        <span class="hint">Fine-grained Token mit Zugriff nur auf das Daten-Repo und der Berechtigung „Contents: Read and write“.</span></div>
+      <hr class="sep">
+      <h3>YouTube-API-Schlüssel <span class="hint" style="font-family:var(--f-body)">optional</span></h3>
+      <div class="f"><label for="s-yt">API-Schlüssel</label><input type="password" id="s-yt" value="${esc(c.ytKey)}" placeholder="AIza…" autocomplete="off" spellcheck="false">
+        <span class="hint">Damit holt die Videothek auch Upload-Datum und Dauer. Ohne Schlüssel nur Titel und Creator.</span></div>
+      <hr class="sep">
+      <h3>Bibliothek pflegen</h3>
+      <div class="actions">
+        <button type="button" class="btn" id="s-check">Fehlende Daten & Verfügbarkeit prüfen</button>
+        <button type="button" class="btn" id="s-export">Als JSON exportieren</button>
+        <label class="btn" for="s-import" style="cursor:pointer">JSON importieren</label><input type="file" id="s-import" accept="application/json,.json" hidden>
+      </div>
+      <span class="hint" id="s-msg"></span>
+    </div>
+    <div class="sheet-foot"><span class="hint err" id="s-err"></span><div class="actions"><button type="button" class="btn ghost" data-close>Abbrechen</button><button class="btn primary" type="submit">Speichern & verbinden</button></div></div>
+  </form></div>`;
+  $("#sf").addEventListener("submit",async e=>{ e.preventDefault();
+    const old=repoKey();
+    S.cfg={owner:$("#s-owner").value.trim(),repo:$("#s-repo").value.trim(),branch:$("#s-branch").value.trim()||"main",
+      path:$("#s-path").value.trim().replace(/^\/+/,"")||"library.json",token:$("#s-token").value.trim(),ytKey:$("#s-yt").value.trim()};
+    lsSet(LS_CFG,S.cfg);
+    const any=S.cfg.owner||S.cfg.repo||S.cfg.token;
+    if(any&&!GH.ready()){ $("#s-err").textContent="Für GitHub brauchst du Besitzer, Repo und Token."; return; }
+    if(GH.ready()){
+      const btn=$("#sf button[type=submit]"); btn.disabled=true; btn.textContent="Verbinde …";
+      if(old!==repoKey()){ S.sha=null; S.dirty=S.videos.size>0; } // lokale Daten ins neue Repo übernehmen
+      await pull({quiet:false});
+      if(S.syncState==="err"){ btn.disabled=false; btn.textContent="Speichern & verbinden"; $("#s-err").textContent=S.syncErr; return; }
+      if(S.dirty||!S.sha) { S.dirty=true; await push(); }
+    }
+    setSync(); showNotice(); closeLayer(); render(); toast(GH.ready()?"Mit GitHub verbunden":"Einstellungen gespeichert");
+  });
+  $("#s-export").addEventListener("click",()=>{
+    const blob=new Blob([JSON.stringify(snapshotData(),null,1)],{type:"application/json"});
+    const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=`videothek-${new Date().toISOString().slice(0,10)}.json`; a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+  });
+  $("#s-import").addEventListener("change",async e=>{
+    const file=e.target.files[0]; if(!file) return; const msg=$("#s-msg");
+    try{ const d=JSON.parse(await file.text()); if(!Array.isArray(d.videos)) throw 0;
+      let n=0; for(const v of d.videos){ if(!v?.id) continue; const cur=S.videos.get(v.id); if(!cur||(v.updatedAt||0)>(cur.updatedAt||0)){ S.videos.set(v.id,v); n++; } }
+      if(d.lists&&(d.listsUpdatedAt||0)>(S.listsUpdatedAt||0)){ S.lists=d.lists; S.listsUpdatedAt=d.listsUpdatedAt; }
+      persist(); render(); msg.className="hint ok"; msg.textContent=`${n} Videos importiert oder aktualisiert.`;
+    }catch(err){ msg.className="hint err"; msg.textContent="Die Datei ist kein Videothek-Export."; }
+    e.target.value="";
+  });
+  $("#s-check").addEventListener("click",async()=>{
+    const msg=$("#s-msg"), btn=$("#s-check"); const ids=[...S.videos.keys()]; if(!ids.length){ msg.className="hint"; msg.textContent="Die Bibliothek ist noch leer."; return; }
+    S.cfg.ytKey=$("#s-yt").value.trim();
+    btn.disabled=true; msg.className="hint"; msg.textContent=`Prüfe ${ids.length} Videos …`;
+    try{ const meta=await fetchMeta(ids); let filled=0,gone=0;
+      for(const [id,m] of meta){ const v=S.videos.get(id); if(!v) continue; const p={};
+        if(!m){ if(v.status!=="Nicht mehr verfügbar"){ p.status="Nicht mehr verfügbar"; gone++; } }
+        else { if(v.status!==m.status) p.status=m.status;
+          for(const k of ["title","creator","uploadDate","duration"]) if(!v[k]&&m[k]){ p[k]=m[k]; } if(Object.keys(p).some(k=>k!=="status")) filled++; }
+        if(Object.keys(p).length) S.videos.set(id,{...v,...p,updatedAt:Date.now()}); }
+      persist(); render(); msg.className="hint ok"; msg.textContent=`Fertig: ${filled} Videos ergänzt, ${gone} neu als nicht verfügbar markiert.`;
+    }catch(e){ msg.className="hint err"; msg.textContent=e.msg||"Die Prüfung hat nicht geklappt."; }
+    btn.disabled=false;
+  });
+}
+
+let tt; function toast(m){ clearTimeout(tt); let el=$(".toast"); if(!el){el=document.createElement("div");el.className="toast";el.setAttribute("role","status");document.body.append(el);} el.textContent=m; el.hidden=false; tt=setTimeout(()=>el.hidden=true,1800); }
+
+/* ================= Ereignisse ================= */
+document.addEventListener("click",e=>{
+  const t=e.target.closest("button,a,label,[data-close],[data-modalbg]"); if(!t) return;
+  const d=t.dataset;
+  if(d.modalbg!==undefined){ if(e.target===t) closeLayer(); return; }
+  if(d.close!==undefined){ closeLayer(); return; }
+  if(d.add!==undefined){ openEditor(); return; }
+  if(d.settings!==undefined){ openSettings(); return; }
+  if(d.retry!==undefined){ S.dirty?push():pull(); return; }
+  if(d.open){ openDrawer(d.open); return; }
+  if(d.play!==undefined){ S.playing=true; $(".player").innerHTML=""; renderDrawer(); return; }
+  if(d.f){ const s=S.f[d.f]; s.has(d.v)?s.delete(d.v):s.add(d.v); render(); return; }
+  if(d.clear){ S.f[d.clear].clear(); render(); return; }
+  if(d.w){ S.f.watched=d.w; render(); return; }
+  if(d.rm){ S.f[d.rm].delete(d.v); render(); return; }
+  if(d.rmw!==undefined){ S.f.watched="all"; render(); return; }
+  if(d.clearall!==undefined){ for(const k of ["genre","format","creator","tags","mood","status"]) S.f[k].clear(); S.f.watched="all"; S.q=""; $("#q").value=""; render(); return; }
+  if(d.tagfilter){ S.f.tags.add(d.tagfilter); closeLayer(); render(); return; }
+  if(d.edit){ openEditor(d.edit); return; }
+  if(d.toggleWatched!==undefined){ const v=S.videos.get(S.openId); updateVideo(v.id,{watched:!v.watched}); toast(v.watched?"Als ungesehen markiert":"Als gesehen markiert"); return; }
+  if(d.del!==undefined){ S.confirmDel=true; renderDrawer(); return; }
+  if(d.delNo!==undefined){ S.confirmDel=false; renderDrawer(); return; }
+  if(d.delYes!==undefined){ const id=S.openId; closeLayer(); removeVideo(id); toast("Gelöscht"); return; }
+  if(d.rmtag){ E.tags=E.tags.filter(x=>x!==d.rmtag); renderTags(); return; }
+  if(d.addtag){ addTag(d.addtag); return; }
+  if(d.pickrx){ E.reactsTo.push(d.pickrx); E.rxQ=""; renderRx(); $("#e-rxq").focus(); return; }
+  if(d.newrx){ E.stubs.set(d.newrx,{id:d.newrx,title:"",creator:"",tags:[],reactsTo:[],status:"Verfügbar",watched:false,addedAt:Date.now()}); E.reactsTo.push(d.newrx); E.rxQ=""; renderRx(); return; }
+  if(d.rmrx){ E.reactsTo=E.reactsTo.filter(x=>x!==d.rmrx); renderRx(); return; }
+});
+$("#addBtn").addEventListener("click",()=>openEditor());
+$("#listsBtn").addEventListener("click",openLists);
+$("#settingsBtn").addEventListener("click",openSettings);
+$("#sync").addEventListener("click",()=>{ if(S.syncState==="err") (S.dirty?push():pull()); else openSettings(); });
+$("#filterToggle").addEventListener("click",()=>$("#rail").classList.toggle("open"));
+$("#q").addEventListener("input",e=>{ S.q=e.target.value.trim(); renderActive(); renderGrid(); });
+$("#sort").value=S.sort;
+$("#sort").addEventListener("change",e=>{ S.sort=e.target.value; lsSet("vt-sort",S.sort); renderGrid(); });
+$("#rail").addEventListener("input",e=>{ if(e.target.id==="creatorQ"){ S.creatorQ=e.target.value; S._focusCreator=true; renderRail(); S._focusCreator=false; } });
+document.addEventListener("keydown",e=>{
+  if(e.key==="Escape"&&$("#layer").innerHTML) closeLayer();
+  if(e.key==="/"&&!/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)&&!$("#layer").innerHTML){ e.preventDefault(); $("#q").focus(); } });
+document.addEventListener("paste",e=>{ // YouTube-URL irgendwo einfügen → direkt neues Video
+  if(/INPUT|TEXTAREA/.test(document.activeElement.tagName)||$("#layer").innerHTML) return;
+  const txt=(e.clipboardData?.getData("text")||"").trim(); if(/youtu/.test(txt)&&parseId(txt)){ e.preventDefault(); openEditor(null,txt); } });
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible"&&GH.ready()&&!pushing&&!S.dirty) pull({quiet:true}); });
+window.addEventListener("beforeunload",e=>{ if(S.dirty&&GH.ready()){ push(); e.preventDefault(); e.returnValue=""; } });
+// Link mit ?add=URL (z. B. per Lesezeichen) öffnet direkt das Formular
+const addParam=new URLSearchParams(location.search).get("add");
+
+/* ================= Start ================= */
+(function start(){
+  const cache=lsGet(LS_CACHE,null);
+  if(cache&&cache.data&&(!GH.ready()||cache.repoKey===repoKey()||!cache.repoKey)){
+    applyData(cache.data); S.sha=cache.sha||null; S.dirty=!!cache.dirty; S.deleted=new Set(cache.deleted||[]);
+    S.loaded=true;
+  }
+  if(!GH.ready()) S.loaded=true;
+  setSync(); showNotice(); render();
+  if(GH.ready()) pull({quiet:!!cache}).then(()=>{ if(S.dirty) push(); });
+  if(addParam&&parseId(addParam)){ history.replaceState(null,"",location.pathname); openEditor(null,addParam); }
+})();
+</script>
+</body>
+</html>

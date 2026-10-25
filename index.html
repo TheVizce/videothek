@@ -39,7 +39,7 @@ a{color:inherit}
 
 .top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--surface);border-bottom:1px solid var(--line);
   padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:12px}
-.top-in{display:flex;gap:12px;align-items:center;flex-wrap:wrap;max-width:1400px;margin:0 auto}
+.top-in{display:flex;gap:12px;align-items:center;flex-wrap:wrap;max-width:2400px;margin:0 auto}
 .brand{display:flex;align-items:baseline;gap:10px;margin-right:auto}
 .brand h1{font-family:var(--f-display);font-weight:700;font-size:22px;letter-spacing:-.01em;margin:0}
 .brand .count{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
@@ -61,7 +61,7 @@ a{color:inherit}
 @keyframes pulse{50%{opacity:.3}}
 .only-narrow{display:none}
 
-.main{display:grid;grid-template-columns:240px minmax(0,1fr);gap:28px;max-width:1400px;margin:0 auto;
+.main{display:grid;grid-template-columns:clamp(220px,14vw,290px) minmax(0,1fr);gap:clamp(24px,2vw,40px);max-width:2400px;margin:0 auto;
   padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px}
 .rail{display:flex;flex-direction:column;gap:20px;align-self:start;position:sticky;top:calc(env(safe-area-inset-top,0px) + 80px);max-height:calc(100vh - 100px);overflow:auto;padding-right:4px}
 .facet h3{font-family:var(--f-mono);font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 6px;display:flex;justify-content:space-between}
@@ -114,7 +114,7 @@ button.chip:hover{border-color:var(--muted)}
 .notice{background:var(--accent-soft);border-radius:var(--r);padding:10px 14px;margin-bottom:16px;font-size:13px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:space-between}
 
 .scrim{position:fixed;inset:0;background:rgba(10,12,16,.45);z-index:20}
-.drawer{position:fixed;top:0;right:0;bottom:0;width:min(560px,100%);background:var(--surface);z-index:21;display:flex;flex-direction:column;
+.drawer{position:fixed;top:0;right:0;bottom:0;width:var(--dw);background:var(--surface);z-index:21;display:flex;flex-direction:column;
   border-left:1px solid var(--line);padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);padding-right:env(safe-area-inset-right,0px)}
 .drawer-head{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--line)}
 .drawer-head h2{font-family:var(--f-display);font-size:15px;margin:0;color:var(--muted);font-weight:600}
@@ -235,6 +235,42 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:4px 0}
 .star.on,.favmark{color:#e8a317}
 .chrow summary .star{margin:-3px 0}
 .follow{display:inline-flex;align-items:center;gap:6px;margin-top:6px}
+html{--dw:min(560px,100%)}
+@media (min-width:1280px){html{--dw:clamp(560px,34vw,900px)}}
+@media (min-width:1500px){
+  body.has-drawer #layer .scrim{display:none}
+  body.has-drawer .top,body.has-drawer .main{padding-right:calc(var(--dw) + 24px)}
+  .drawer{box-shadow:-16px 0 40px -28px rgba(0,0,0,.45)}
+}
+@media (min-width:1800px){.grid{grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:26px 20px}.sheet{width:min(760px,100%)}}
+.lblrow{display:flex;align-items:center;gap:6px}
+.lblrow label{font-family:var(--f-mono);font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+.qbtn{width:18px;height:18px;border-radius:50%;border:1px solid var(--line);background:var(--surface);font-size:11px;line-height:1;padding:0;color:var(--muted);font-weight:600;flex:none}
+.qbtn:hover{color:var(--accent);border-color:var(--accent)}
+.ghint{min-height:1.3em;line-height:1.35}
+.opt.old span:first-child{color:var(--muted)}
+.oldtag{font-family:var(--f-mono);font-size:10px;text-transform:uppercase;border:1px solid var(--line);border-radius:3px;padding:0 3px;margin-left:2px}
+.lerows{display:flex;flex-direction:column;gap:8px}
+.lerow{border:1px solid var(--line);border-radius:var(--r);padding:8px;display:flex;flex-direction:column;gap:6px;background:var(--surface)}
+.lerow-top{display:flex;gap:8px;align-items:center}
+.lerow-top .le-name{flex:1;min-width:0;padding:6px 8px;border:1px solid var(--line);border-radius:4px;background:var(--bg);font-weight:600}
+.le-desc{width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:4px;background:var(--bg);font-size:13px;resize:vertical;line-height:1.4}
+.recprev{display:flex;flex-direction:column;gap:10px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+.recgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.recgrid ul,.keep{margin:4px 0 0;padding-left:18px}
+.recgrid li{font-size:13px}
+.recgrid .lbl{font-family:var(--f-mono);font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+.extorig{padding:8px 10px;border:1px solid var(--line);border-radius:var(--r)}
+.sheet.help{max-height:calc(100dvh - 64px)}
+.helpnav{display:flex;gap:6px;flex-wrap:wrap;padding:10px 20px;border-bottom:1px solid var(--line)}
+.helpbody{overflow:auto;min-height:0;flex:1;position:relative;gap:6px}
+.helpbody section h3{font-family:var(--f-display);font-size:18px;margin:10px 0 2px}
+.g-item{padding:10px 0;border-top:1px solid var(--line)}
+.g-item h4{margin:0 0 4px;font-family:var(--f-display);font-size:15px}
+.g-item p{margin:3px 0;max-width:75ch}
+.g-item .g-sum{font-weight:500}
+.g-item em{font-style:normal;font-weight:600}
+.g-list{margin:6px 0 0;padding-left:18px}.g-list li{margin:5px 0;max-width:75ch}
 @media (max-width:820px){
   .main{grid-template-columns:minmax(0,1fr)}
   .rail{position:static;max-height:none;display:none;border:1px solid var(--line);border-radius:10px;padding:14px;background:var(--surface)}
@@ -257,7 +293,7 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:4px 0}
     </div>
     <button class="sync" id="sync" title="Speicherstatus und Einstellungen"><i></i><span>…</span></button>
     <button class="btn only-narrow" id="filterToggle">Filter</button>
-    <button class="btn ghost" id="listsBtn" title="Listen für Genre, Format und Stimmung bearbeiten">Listen</button>
+    <button class="btn ghost" id="listsBtn" title="Listen und Einordnungshilfe für Genre, Format und mehr">Listen</button>
     <button class="btn ghost" id="settingsBtn">Einstellungen</button>
     <button class="btn primary" id="addBtn">+ Video</button>
   </div>
@@ -285,15 +321,91 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:4px 0}
 </div>
 
 <div id="layer"></div>
+<div id="layer2"></div>
 
 <script>
 "use strict";
-const DEFAULT_LISTS = {
-  genres:["Unterhaltung","Politik","Tech","Medien","Wissen","Gaming","Musik"],
-  formats:["Essay","Kommentar","Reaction","Compilation","Interview","Doku","Tutorial","Podcast"],
-  moods:["Lustig","Nachdenklich","Entspannt","Spannend","Aufregend","Informativ","Bedrückend"]
-};
 const STATUSES = ["Verfügbar","Nicht mehr verfügbar","Privat"];
+/* ================= Empfohlene Einteilung & Einordnungshilfe ================= */
+const RECOMMENDED = {
+  moodLabel:"Anspruch",
+  genres:["Politik & Gesellschaft","Wirtschaft & Geld","Kultur & Medien","Tech & Digitales","Wissenschaft & Geschichte","Sport","Gaming","Comedy & Spaß","Alltag & Lifestyle","Sonstiges"],
+  formats:["Video-Essay","Doku & Reportage","Erklärvideo","Kommentar & Review","Reaction","Gespräch & Podcast","Highlights & Clips","Show & Sketch","Vlog & Stream","Tutorial"],
+  moods:["Nebenbei","Zurücklehnen","Konzentriert"],
+  desc:{
+    genres:{
+      "Politik & Gesellschaft":"Wie wir zusammenleben und wer darüber entscheidet.\nDazu: Parteien, Wahlen, Gesetze, Außenpolitik, aktuelle Kriege und Konflikte, soziale Fragen, Migration, Klima als politisches Thema, Justiz, Kriminalfälle und True Crime, Satire über Politik.\nNicht: Firmen, Märkte und Geld ohne politischen Streit → Wirtschaft & Geld · abgeschlossene historische Ereignisse → Wissenschaft & Geschichte · Streit unter Creatorn → Kultur & Medien.\nFaustregel: Würde es in den Politik- oder Gesellschaftsteil einer Zeitung gehören?",
+      "Wirtschaft & Geld":"Unternehmen, Märkte und das eigene Geld.\nDazu: Firmengeschichten („Warum ging X pleite?“), Börse, Inflation, Immobilien, Arbeitswelt, Karriere, Konsum, Marketing, persönliche Finanzen.\nNicht: Steuern oder Wirtschaftspolitik als Parteienstreit → Politik & Gesellschaft · Produkte von Tech-Firmen → Tech & Digitales.",
+      "Kultur & Medien":"Werke, Medien und das Internet als Kulturraum.\nDazu: Film, Serien, Bücher, Musik, Kunst, Design, Journalismus und Medienkritik, Internetkultur, Memes, YouTube- und Creator-Szene, Influencer-Drama.\nNicht: Videospiele → Gaming · Werbung als Geschäft → Wirtschaft & Geld · Technik hinter Plattformen → Tech & Digitales.",
+      "Tech & Digitales":"Geräte, Software und wie das Digitale funktioniert.\nDazu: Hardware, Smartphones, Software, KI, Internet und Datenschutz, IT-Sicherheit, Programmieren, Elektroautos, Raumfahrttechnik, Tests und Vergleiche.\nNicht: Social-Media-Trends → Kultur & Medien · Spiele selbst → Gaming (Gaming-Hardware bleibt hier) · Gesetzgebung zu Tech als Parteistreit → Politik & Gesellschaft.",
+      "Wissenschaft & Geschichte":"Die Welt verstehen: wie sie funktioniert und wie sie wurde.\nDazu: Naturwissenschaften, Medizin und Forschung, Psychologie, Philosophie, Weltall, Natur und Tiere, Geografie, Sprache, Geschichte, Archäologie.\nNicht: aktuelle Politik zu Wissenschaftsthemen → Politik & Gesellschaft · Gesundheitstipps für den Alltag → Alltag & Lifestyle.\nFaustregel Geschichte: Liegt das Ereignis abgeschlossen in der Vergangenheit (grob mehr als 20 Jahre), gehört es hierher, auch wenn es politisch ist.",
+      "Sport":"Wettkampfsport und alles drumherum.\nDazu: Spiele und Highlights, Analysen, Transfers, Sportlerporträts, Sportgeschichte, Ligen und Verbände.\nNicht: E-Sport → Gaming · eigenes Training und Fitness → Alltag & Lifestyle.",
+      "Gaming":"Videospiele und ihre Szene.\nDazu: Let's Plays, Spiele-Reviews, Spielegeschichte, E-Sport, Speedruns, Branchennews, Modding.\nNicht: Tests von Konsolen, PCs und Grafikkarten → Tech & Digitales · Brett- und Kartenspiele → Alltag & Lifestyle.",
+      "Comedy & Spaß":"Unterhaltung, bei der es kein eigentliches Thema gibt.\nDazu: Sketche, Stand-up, Pranks, Challenges, Fails, Meme-Compilations, absurder Quatsch.\nNicht: Satire über Politik → Politik & Gesellschaft · lustige Videos über Spiele → Gaming. Humor allein entscheidet nicht über das Genre.\nFaustregel: Nur wählen, wenn du nicht sagen kannst, worum es geht, außer „um lustig zu sein“.",
+      "Alltag & Lifestyle":"Das eigene Leben: zu Hause, unterwegs, im Körper.\nDazu: Kochen und Essen, Reisen, Wohnen, Heimwerken und DIY, Gesundheit, Fitness, Beziehungen, Produktivität, Mode, persönliche Vlogs, Brett- und Kartenspiele.\nNicht: Ernährung oder Medizin als Forschung → Wissenschaft & Geschichte · Reisen als Geschichtsthema → Wissenschaft & Geschichte.",
+      "Sonstiges":"Nur wenn wirklich kein anderes Genre passt.\nPrüfe ab und zu, was hier liegt: Sammeln sich mehr als etwa fünf Videos zum selben Thema, bekommt es ein eigenes Genre."
+    },
+    formats:{
+      "Video-Essay":"Eine Person entwickelt einen Gedankengang oder eine These, mit Skript und Montage.\nErkennbar an: Autorenstimme, Archivmaterial und Grafiken, „Warum …“- oder „Wie … wurde“-Titel, oft 20 bis 90 Minuten.\nNicht: erklärt neutral ohne eigene These → Erklärvideo · eigene Recherche vor Ort mit Interviews → Doku & Reportage · spontane Meinung ohne Skript → Kommentar & Review.",
+      "Doku & Reportage":"Journalistische Recherche mit Dreh und mehreren Stimmen.\nErkennbar an: Aufnahmen vor Ort, O-Töne und Interviews, Protagonisten, die man begleitet. Auch TV-Dokus und Reportagen auf YouTube.\nNicht: eine Person erzählt aus dem Off mit Archivmaterial → Video-Essay.",
+      "Erklärvideo":"Erklärt neutral, wie etwas funktioniert oder was etwas ist.\nErkennbar an: Ziel ist Verstehen, oft animiert oder mit Moderation, meist 5 bis 20 Minuten, wenig Meinung.\nNicht: Ziel ist, etwas selbst zu machen → Tutorial · klare These und Argumentation → Video-Essay.",
+      "Kommentar & Review":"Jemand bezieht Stellung oder bewertet etwas.\nDazu: Meinungsvideos zu aktuellen Themen, Rants, Hot Takes, Film-, Buch-, Spiele- und Produkt-Reviews.\nErkennbar an: wenig Schnitt, Person spricht in die Kamera, oft schnell veraltet.\nNicht: das Original läuft im Video mit → Reaction · lange Argumentation mit Skript und Recherche → Video-Essay.",
+      "Reaction":"Das Original läuft im Video (ganz oder in großen Teilen) und jemand reagiert darauf, live oder geschnitten.\nImmer Reaction, auch wenn viel analysiert wird. Verknüpfe das Original oder markiere es als „kein YouTube-Video“.\nNicht: es werden nur kurze Ausschnitte als Beleg gezeigt → Kommentar & Review oder Video-Essay.",
+      "Gespräch & Podcast":"Menschen reden miteinander, das Gespräch ist der Inhalt.\nDazu: Interviews, Podcasts, Talkshows, Diskussionsrunden, Q&As.\nNicht: Mitschnitt eines Streams mit Chat → Vlog & Stream.",
+      "Highlights & Clips":"Zusammenschnitte ohne eigenen Erzählbogen.\nDazu: Spiel-Highlights, Best-ofs, Compilations, Ausschnitte aus Streams oder Sendungen, Trailer, Supercuts.\nNicht: Ausschnitt mit eigener Einordnung → Kommentar & Review.",
+      "Show & Sketch":"Inszenierte Unterhaltung und Auftritte.\nDazu: Sketche, Spielshows, Challenges, Satire-Sendungen, Stand-up, Musikvideos und Konzerte.\nNicht: ungeplanter Alltag → Vlog & Stream.",
+      "Vlog & Stream":"Persönlich und wenig geschnitten.\nDazu: Alltags- und Reise-Vlogs, Livestream-Aufzeichnungen, Let's Plays, „Komm mit“-Videos.\nNicht: geplantes Gespräch → Gespräch & Podcast · inszenierte Show → Show & Sketch.",
+      "Tutorial":"Anleitung zum Selbermachen.\nDazu: Rezepte, Software-Anleitungen, Reparatur, DIY, Workouts zum Mitmachen, Lernvideos mit Übungen.\nFaustregel: Würdest du beim Schauen mitmachen oder pausieren, um es nachzumachen? Dann Tutorial."
+    },
+    moods:{
+      "Nebenbei":"Muss nicht angeschaut werden: läuft gut beim Kochen, Aufräumen oder Spielen.\nWenn du kurz abgelenkt bist, verpasst du nichts Wichtiges. Ersetzt einen Podcast.\nTypisch: Gespräche, Vlogs, Streams, Highlights, viele Kommentare.",
+      "Zurücklehnen":"Hinschauen lohnt sich, ist aber leicht verdaulich.\nIdeal abends auf dem Sofa: Bilder gehören dazu, du folgst ohne Anstrengung.\nTypisch: Dokus, Shows, gut gemachte Erklärvideos, die meisten Reactions.",
+      "Konzentriert":"Dichtes Material, das volle Aufmerksamkeit braucht.\nAm besten ausgeruht; eventuell pausieren, zurückspulen, nachdenken.\nTypisch: lange Video-Essays, komplexe Analysen, Wissenschaft, Philosophie."
+    }
+  }
+};
+const GUIDE_RULES=[
+  ["Ein Feld, eine Frage","Genre: Worum geht es? · Format: Wie ist es gemacht? · Anspruch: Wie viel Aufmerksamkeit braucht es? · Tags: Wer und was genau?"],
+  ["Das Video zählt, nicht der Kanal","Ein Tech-Kanal kann ein Wirtschaftsvideo machen. Ordne jedes Video für sich ein. Standardwerte pro Kanal oder Reihe sind nur ein Startpunkt."],
+  ["Bei zwei Kandidaten","Nimm den Wert, unter dem du das Video später suchen würdest. Der zweite Aspekt kommt als Tag dazu."],
+  ["Reactions","Format ist immer Reaction. Das Genre richtet sich nach dem Thema des Originals und wird beim Verknüpfen übernommen."],
+  ["Humor entscheidet nicht","Satire über Politik ist Genre Politik & Gesellschaft mit Format Show & Sketch. Comedy & Spaß nur, wenn es sonst kein Thema gibt."],
+  ["Lieber leer als falsch","Wenn du unsicher bist, lass das Feld leer und ergänze es später. Über die Filter findest du Videos ohne Wert schnell wieder."]
+];
+const GUIDE_TAGS=[
+  "Kleingeschrieben, Einzahl, ohne #: „ki“, „bundestagswahl“, „elektroauto“.",
+  "Konkretes statt Allgemeines: Personen, Teams, Orte, Werke, Ereignisse und Unterthemen.",
+  "Nichts doppeln, was Genre, Format oder Creator schon sagen: kein Tag „politik“, „reaction“ oder Kanalname.",
+  "2 bis 5 Tags pro Video. Bevor du einen neuen Tag anlegst, schau in die Vorschläge.",
+  "Namen immer gleich schreiben: voller Name („olaf scholz“), Abkürzung nur, wenn sie gängiger ist („nato“, „ki“).",
+  "Mehrteilige Projekte sind eine Reihe, kein Tag.",
+  "Wenn dir die Gefühlslage wichtig ist, nutze wenige feste Tags dafür, z. B. „lustig“, „bedrückend“, „aufregend“."
+];
+/* Alte Werte, die sich eindeutig zuordnen lassen. Alles andere bleibt stehen und wird als „alt“ markiert. */
+const RECOMMENDED_MAP={
+  genre:{"Politik & Gesellschaft":"Politik & Gesellschaft","Politik":"Politik & Gesellschaft","Tech & Digitales":"Tech & Digitales","Tech":"Tech & Digitales",
+    "Kultur & Medien":"Kultur & Medien","Medien":"Kultur & Medien","Musik":"Kultur & Medien","Wissen & Einordnung":"Wissenschaft & Geschichte","Wissen":"Wissenschaft & Geschichte",
+    "Gaming":"Gaming","Sonstiges":"Sonstiges"},
+  format:{"Reaction":"Reaction","Tutorial":"Tutorial","Interview / Podcast":"Gespräch & Podcast","Interview":"Gespräch & Podcast","Podcast":"Gespräch & Podcast",
+    "Kommentar / Analyse":"Kommentar & Review","Kommentar":"Kommentar & Review","Essay":"Video-Essay","Doku":"Doku & Reportage","Compilation":"Highlights & Clips"},
+  mood:{"Leicht":"Nebenbei","Mittel":"Zurücklehnen","Anspruchsvoll":"Konzentriert"}
+};
+const moodLabel=()=>S.lists.moodLabel||"Stimmung";
+const LIST_KEYS=[["genres","genre","Genre"],["formats","format","Format"],["moods","mood",null]];
+function descOf(listKey,val){ return S.lists.desc?.[listKey]?.[val]||""; }
+const firstLine=t=>(t||"").split("\n")[0];
+const isRxFormat=f=>/reaction|reaktion/i.test(f||"");
+const isReaction=v=>isRxFormat(v.format)||(v.reactsTo||[]).length>0||!!v.extOrig;
+function fmtGuideText(t){
+  return esc(t).split("\n").map((line,i)=>{
+    if(i===0) return `<p class="g-sum">${line}</p>`;
+    const m=line.match(/^(Dazu|Nicht|Erkennbar an|Typisch|Faustregel[^:]*|Immer[^:]*):\s?(.*)$/);
+    return m?`<p><b>${m[1]}:</b> ${m[2].replace(/→ ([^·]+)/g,'→ <em>$1</em>')}</p>`:`<p>${line}</p>`;
+  }).join("");
+}
+
+const DEFAULT_LISTS={genres:[...RECOMMENDED.genres],formats:[...RECOMMENDED.formats],moods:[...RECOMMENDED.moods],moodLabel:RECOMMENDED.moodLabel,desc:structuredClone(RECOMMENDED.desc)};
+
 const LS_CFG="vt-config", LS_CACHE="vt-cache";
 
 /* ================= Speicher: GitHub + lokaler Cache ================= */
@@ -349,7 +461,7 @@ function applyData(d){
   S.series=new Map((d?.series||[]).filter(x=>x&&x.id).map(x=>[x.id,x]));
   S.channels=new Map((d?.channels||[]).filter(x=>x&&x.id).map(x=>[x.id,x]));
   S.feedHidden={...(d?.feedHidden||{})};
-  if(d?.lists) S.lists={genres:d.lists.genres||[],formats:d.lists.formats||[],moods:d.lists.moods||[]};
+  if(d?.lists) S.lists={genres:d.lists.genres||[],formats:d.lists.formats||[],moods:d.lists.moods||[],moodLabel:d.lists.moodLabel||"",desc:d.lists.desc||{}};
   S.listsUpdatedAt=d?.listsUpdatedAt||0;
 }
 function mergeRemote(d){
@@ -420,7 +532,7 @@ const S = {
   videos:new Map(), series:new Map(), deletedSeries:new Set(), channels:new Map(), deletedChannels:new Set(), feedHidden:{}, unhidden:new Set(), view:lsGet("vt-view","videos"), lists:structuredClone(DEFAULT_LISTS), listsUpdatedAt:0, loaded:false,
   cfg:Object.assign({owner:"",repo:"",branch:"main",path:"library.json",token:"",ytKey:""},lsGet(LS_CFG,{})),
   sha:null, dirty:false, deleted:new Set(), syncState:"", syncErr:"",
-  f:{genre:new Set(),format:new Set(),mood:new Set(),creator:new Set(),tags:new Set(),status:new Set(),series:new Set(),watched:"all",inclRx:lsGet("vt-inclrx",false)},
+  f:{genre:new Set(),format:new Set(),mood:new Set(),creator:new Set(),tags:new Set(),status:new Set(),series:new Set(),watched:"all",rx:"all",todo:"",inclRx:lsGet("vt-inclrx",false)},
   sf:{kind:new Set(),progress:"all"}, openSeries:null, q:"", sort:lsGet("vt-sort","added"), creatorQ:"", openId:null, playing:false
 };
 const $ = s=>document.querySelector(s);
@@ -477,6 +589,9 @@ function matches(v,skip){
   if(skip!=="status"&&f.status.size&&!f.status.has(v.status||"Verfügbar")) return false;
   if(skip!=="series"&&f.series.size&&!(SI.get(v.id)||[]).some(p=>f.series.has(p.s.id))) return false;
   if(skip!=="tags"&&f.tags.size){ const et=effTags(v); for(const t of f.tags) if(!et.includes(t)) return false; }
+  if(skip!=="rx"&&f.rx!=="all"){ if(!isReaction(v)) return false; const has=(v.reactsTo||[]).length>0;
+    if(f.rx==="missing"&&(has||v.extOrig)) return false; if(f.rx==="linked"&&!has) return false; if(f.rx==="external"&&!v.extOrig) return false; }
+  if(skip!=="todo"&&f.todo){ if(f.todo==="old"&&!LIST_KEYS.some(([lk,k])=>isOldVal(lk,v[k]))) return false; if(f.todo==="nogenre"&&v.genre) return false; if(f.todo==="noformat"&&v.format) return false; if(f.todo==="nomood"&&v.mood) return false; }
   if(skip!=="watched"){ if(f.watched==="yes"&&!v.watched) return false; if(f.watched==="no"&&v.watched) return false; }
   if(S.q){ const hay=[v.title,v.creator,v.genre,v.format,v.mood,v.notes,...(v.tags||[])].join(" ").toLowerCase();
     for(const w of S.q.toLowerCase().split(/\s+/).filter(Boolean)) if(!hay.includes(w)) return false; }
@@ -530,11 +645,14 @@ function render(){
 }
 
 function facetCounts(key,getter){ const m=new Map(); for(const v of S.videos.values()){ if(!matches(v,key)) continue; for(const k of [].concat(getter(v))) if(k) m.set(k,(m.get(k)||0)+1); } return m; }
-function facetBlock(title,key,values,counts){
+function facetBlock(title,key,values,counts,lk){
   const set=S.f[key]; if(!values.length) return "";
-  return `<div class="facet"><h3>${title}${set.size?`<button data-clear="${key}">zurücksetzen</button>`:""}</h3><div class="opts">
-    ${values.map(val=>`<button class="opt ${set.has(val)?"on":""}" data-f="${key}" data-v="${esc(val)}"><span>${esc(val)}</span><span class="n">${counts.get(val)||0}</span></button>`).join("")}
+  return `<div class="facet"><h3>${esc(title)}${set.size?`<button data-clear="${key}">zurücksetzen</button>`:lk?`<button data-help="${lk}" title="Einordnungshilfe">?</button>`:""}</h3><div class="opts">
+    ${values.map(val=>{ const old=lk&&isOldVal(lk,val); return `<button class="opt ${set.has(val)?"on":""} ${old?"old":""}" data-f="${key}" data-v="${esc(val)}" title="${esc(old?"Alter Wert, steht nicht mehr in deiner Liste":lk?firstLine(descOf(lk,val)):"")}"><span>${esc(val)}${old?' <span class="oldtag">alt</span>':""}</span><span class="n">${counts.get(val)||0}</span></button>`; }).join("")}
   </div></div>`;
+}
+function optsBlock(title,items,cur,attr){ // einfache Auswahl mit Zählern
+  return `<div class="facet"><h3>${esc(title)}</h3><div class="opts">${items.map(([k,l,n])=>`<button class="opt ${cur===k?"on":""}" ${attr}="${k}"><span>${esc(l)}</span>${n!==undefined?`<span class="n">${n}</span>`:""}</button>`).join("")}</div></div>`;
 }
 function renderRail(){
   const r=$("#rail"); if(!S.videos.size){ r.innerHTML=`<p class="hint">Filter erscheinen, sobald Videos in der Bibliothek sind.</p>`; return; }
@@ -551,15 +669,22 @@ function renderRail(){
       ${[["all","Alle"],["no","Ungesehen"],["yes","Gesehen"]].map(([k,l])=>`<button data-w="${k}" class="${S.f.watched===k?"on":""}">${l}</button>`).join("")}
     </div></div>
     ${[...S.videos.values()].some(v=>(v.reactsTo||[]).length)?`<label class="check" style="padding:0;align-items:flex-start" title="Reactions erscheinen auch, wenn ihr Original zum Genre- oder Tag-Filter passt"><input type="checkbox" id="inclRx" ${S.f.inclRx?"checked":""} style="margin-top:3px"><span>Reactions über Genre und Tags ihres Originals finden</span></label>`:""}
-    ${facetBlock("Genre","genre",withExtra(S.lists.genres,gC),gC)}
-    ${facetBlock("Format","format",withExtra(S.lists.formats,fC),fC)}
+    ${facetBlock("Genre","genre",withExtra(S.lists.genres,gC),gC,"genres")}
+    ${facetBlock("Format","format",withExtra(S.lists.formats,fC),fC,"formats")}
+    ${(()=>{ const rv=[...S.videos.values()].filter(v=>isReaction(v)&&matches(v,"rx")); if(!rv.length&&S.f.rx==="all") return "";
+      const c={all:rv.length,missing:rv.filter(v=>!(v.reactsTo||[]).length&&!v.extOrig).length,linked:rv.filter(v=>(v.reactsTo||[]).length).length,external:rv.filter(v=>v.extOrig).length};
+      return optsBlock("Reactions",[["all","Alle Videos"],["missing","Ohne Original",c.missing],["linked","Mit YouTube-Original",c.linked],["external","Original nicht auf YouTube",c.external]],S.f.rx,"data-rxf"); })()}
     <div class="facet"><h3>Creator${S.f.creator.size?`<button data-clear="creator">zurücksetzen</button>`:""}</h3>
       ${allCreators().length>8?`<input class="small-in" id="creatorQ" placeholder="Creator suchen" value="${esc(S.creatorQ)}">`:""}
       <div class="opts">${showC.map(c=>`<button class="opt ${S.f.creator.has(c)?"on":""}" data-f="creator" data-v="${esc(c)}"><span>${esc(c)}</span><span class="n">${cC.get(c)||0}</span></button>`).join("")||'<span class="hint">Keine Treffer</span>'}</div></div>
     ${tagList.length?`<div class="facet"><h3>Tags${S.f.tags.size?`<button data-clear="tags">zurücksetzen</button>`:""}</h3><div class="tagcloud">
       ${tagList.map(t=>`<button class="chip ${S.f.tags.has(t)?"on":""}" data-f="tags" data-v="${esc(t)}">${esc(t)} <span class="mono" style="opacity:.6">${tagCounts.get(t)||0}</span></button>`).join("")}
     </div></div>`:""}
-    ${facetBlock("Stimmung","mood",withExtra(S.lists.moods,mC),mC)}
+    ${facetBlock(moodLabel(),"mood",withExtra(S.lists.moods,mC),mC,"moods")}
+    ${(()=>{ const base=[...S.videos.values()].filter(v=>matches(v,"todo"));
+      const c={old:base.filter(v=>LIST_KEYS.some(([lk,k])=>isOldVal(lk,v[k]))).length,nogenre:base.filter(v=>!v.genre).length,noformat:base.filter(v=>!v.format).length,nomood:base.filter(v=>!v.mood).length};
+      const items=[["old","Alte Werte",c.old],["nogenre","Ohne Genre",c.nogenre],["noformat","Ohne Format",c.noformat],["nomood","Ohne "+moodLabel(),c.nomood]].filter(x=>x[2]||S.f.todo===x[0]);
+      return items.length?optsBlock("Einordnen",[["","Alle Videos"],...items],S.f.todo,"data-todo"):""; })()}
     ${S.series.size?(()=>{ const c=facetCounts("series",v=>(SI.get(v.id)||[]).map(p=>p.s.id)); const ser=[...S.series.values()].sort((a,b)=>a.name.localeCompare(b.name,"de"));
       return `<div class="facet"><h3>Reihe${S.f.series.size?`<button data-clear="series">zurücksetzen</button>`:""}</h3><div class="opts">${ser.map(x=>`<button class="opt ${S.f.series.has(x.id)?"on":""}" data-f="series" data-v="${esc(x.id)}"><span>${esc(x.name)}</span><span class="n">${c.get(x.id)||0}</span></button>`).join("")}</div></div>`; })():""}
     ${facetBlock("Status","status",STATUSES.filter(s=>sC.get(s)),sC)}`;
@@ -570,16 +695,18 @@ function renderActive(){
   for(const k of ["genre","format","creator","tags","mood","status"]) for(const v of S.f[k]) chips.push(`<span class="chip">${esc(v)}<button data-rm="${k}" data-v="${esc(v)}" aria-label="Filter entfernen">✕</button></span>`);
   if(S.f.watched!=="all") chips.push(`<span class="chip">${S.f.watched==="yes"?"Gesehen":"Ungesehen"}<button data-rmw aria-label="Filter entfernen">✕</button></span>`);
   const n=[...S.videos.values()].filter(v=>matches(v)).length;
+  if(S.f.rx!=="all") chips.push(`<span class="chip">${{missing:"Reactions ohne Original",linked:"Reactions mit Original",external:"Original nicht auf YouTube"}[S.f.rx]}<button data-rxf="all" aria-label="Filter entfernen">✕</button></span>`);
+  if(S.f.todo) chips.push(`<span class="chip">${{old:"Alte Werte",nogenre:"Ohne Genre",noformat:"Ohne Format",nomood:"Ohne "+moodLabel()}[S.f.todo]}<button data-todo="" aria-label="Filter entfernen">✕</button></span>`);
   for(const sid of S.f.series){ const x=S.series.get(sid); if(x) chips.push(`<span class="chip">Reihe: ${esc(x.name)}<button data-rm="series" data-v="${esc(sid)}" aria-label="Filter entfernen">✕</button></span>`); }
-  $("#active").innerHTML=`<span class="hint mono">${n} von ${S.videos.size}</span>${chips.join("")}${chips.length?`<button class="btn ghost" data-clearall style="padding:3px 8px;font-size:12px">Alle Filter löschen</button>`:""}`;
+  $("#active").innerHTML=`<span class="hint mono">${n} von ${S.videos.size}</span>${chips.join("")}${chips.length?`<button class="btn ghost" data-clearall style="padding:3px 8px;font-size:12px">Alle Filter löschen</button>`:""}${(chips.length||S.q)&&n?`<button class="btn" data-bulkedit style="padding:3px 10px;font-size:12px">${plur(n,"Video","Videos")} bearbeiten</button>`:""}`;
 }
 function renderGrid(){
   const g=$("#grid");
   if(!S.loaded){ g.style.display="block"; g.innerHTML=`<p class="hint">Bibliothek wird geladen …</p>`; return; }
   if(!S.videos.size){ g.style.display="block"; g.innerHTML=`<div class="empty">
       <h2>Deine Bibliothek ist noch leer</h2>
-      <p>Füge die URL eines YouTube-Videos ein. Danach vergibst du Genre, Format, Tags und Stimmung, und kannst Reactions mit ihren Originalen verknüpfen.</p>
-      <div class="actions" style="justify-content:center"><button class="btn primary" data-add>+ Erstes Video hinzufügen</button><button class="btn" data-plimport>Playlist importieren</button></div></div>`; return; }
+      <p>Füge die URL eines YouTube-Videos ein. Danach ordnest du es nach Genre, Format und Tags ein und kannst Reactions mit ihren Originalen verknüpfen.</p>
+      <div class="actions" style="justify-content:center"><button class="btn primary" data-add>+ Erstes Video hinzufügen</button><button class="btn" data-plimport>Mehrere Videos oder Playlist</button></div></div>`; return; }
   const list=sorted([...S.videos.values()].filter(v=>matches(v)));
   if(!list.length){ g.style.display="block"; g.innerHTML=`<div class="empty"><h2>Nichts gefunden</h2><p>Kein Video passt zu Suche und Filtern.</p><button class="btn" data-clearall>Filter zurücksetzen</button></div>`; return; }
   g.style.display="";
@@ -625,7 +752,7 @@ function drawerRest(v,originals,reacts,row){
       </div>
       ${!v.title?`<div class="notice">Dieses Video wurde als Original einer Reaction angelegt. Ergänze die Details über „Bearbeiten“.</div>`:""}
       <dl class="props">
-        ${row("Genre",esc(v.genre))}${row("Format",esc(v.format))}${row("Stimmung",esc(v.mood))}
+        ${row("Genre",esc(v.genre))}${row("Format",esc(v.format))}${row(esc(moodLabel()),esc(v.mood))}
         ${row("Dauer",v.duration?`<span class="mono">${fmtDur(v.duration)}</span>`:"")}
         ${row("Upload",v.uploadDate?`<span class="mono">${fmtDate(v.uploadDate)}</span>`:"")}
         ${row("Status",esc(v.status||"Verfügbar"))}
@@ -636,6 +763,8 @@ function drawerRest(v,originals,reacts,row){
       ${v.notes?`<div class="sec"><h4>Notizen</h4><p class="notes">${esc(v.notes)}</p></div>`:""}
       ${seriesNavHTML(v)}
       ${originals.length?`<div class="sec"><h4>Reaction auf</h4><div class="linklist">${originals.map(o=>miniHTML(o)).join("")}</div></div>`:""}
+      ${v.extOrig?`<div class="sec"><h4>${originals.length?"Außerdem Reaction auf":"Reaction auf"}</h4><div class="extorig">Kein YouTube-Video${v.extOrig.note?`: <b>${esc(v.extOrig.note)}</b>`:""}${/^https?:\/\//i.test(v.extOrig.url||"")?` · <a href="${esc(v.extOrig.url)}" target="_blank" rel="noopener">Link ↗</a>`:""}</div></div>`:""}
+      ${isRxFormat(v.format)&&!(v.reactsTo||[]).length&&!v.extOrig?`<div class="notice"><span>Für diese Reaction ist noch kein Original hinterlegt.</span><button class="btn" data-edit="${v.id}">Original hinterlegen</button></div>`:""}
       ${reacts.length?`<div class="sec"><h4>Reactions auf dieses Video (${reacts.length})</h4><div class="linklist">${reacts.map(o=>miniHTML(o)).join("")}</div></div>`:""}
       <div>${S.confirmDel?`<div class="confirm"><span>Video endgültig aus der Bibliothek löschen?</span><button class="btn danger" data-del-yes>Löschen</button><button class="btn ghost" data-del-no>Abbrechen</button></div>`
         :`<button class="btn ghost danger" data-del>Aus Bibliothek löschen</button>`}</div>`;
@@ -829,7 +958,7 @@ function openSeriesEditor(id,{pick=[],playlist=""}={}){
       <div class="row">
         <div class="f"><label for="se-genre">Genre</label><select id="se-genre">${opt(S.lists.genres,def.genre)}</select></div>
         <div class="f"><label for="se-format">Format</label><select id="se-format">${opt(S.lists.formats,def.format)}</select></div>
-        <div class="f"><label for="se-mood">Stimmung</label><select id="se-mood">${opt(S.lists.moods,def.mood)}</select></div>
+        <div class="f"><label for="se-mood">${esc(moodLabel())}</label><select id="se-mood">${opt(S.lists.moods,def.mood)}</select></div>
       </div>
       <div class="f"><label for="se-tags">Tags</label><input type="text" id="se-tags" list="dl-alltags" value="${esc((def.tags||[]).join(", "))}" placeholder="mit Komma trennen"><datalist id="dl-alltags">${allTags().map(t=>`<option value="${esc(t[0])}">`).join("")}</datalist></div>
       <label class="check"><input type="checkbox" id="se-applyold"> Auch bei hinzugefügten Videos, die schon in der Bibliothek sind, leere Felder füllen und Tags ergänzen</label>
@@ -1101,7 +1230,7 @@ function openChannels(focusId){
         <div class="actions" style="align-items:center"><label class="btn" for="cm-csv" style="cursor:pointer">Abos aus Google Takeout importieren</label><input type="file" id="cm-csv" accept=".csv,text/csv" hidden>
         <span class="hint">Datei <span class="mono">subscriptions.csv</span>, Anleitung in der README</span></div></div>
       ${S.channels.size>6?`<input class="small-in" id="cm-q" placeholder="In ${S.channels.size} Kanälen suchen" style="margin:0">`:""}
-      <p class="hint" style="margin:0"><b>Nur Videos mit</b> und <b>Ohne</b> prüfen den Videotitel, mehrere Begriffe trennst du mit Komma. Groß- und Kleinschreibung ist egal.</p>
+      <p class="hint" style="margin:0"><b>Nur Videos mit</b> und <b>Ohne</b> prüfen den Videotitel, mehrere Begriffe trennst du mit Komma. Groß- und Kleinschreibung ist egal. Typische Fälle: von einem Liga- oder Vereinskanal nur ein Team (Teamname, Stadt), von einem Sender nur eine Rubrik oder Sendung, von einem großen Kanal nur eine bestimmte Serie („Folge“, „Teil“) oder keine Livestreams und Trailer.</p>
       <div id="cm-list" class="parts"></div>
     </div>
     <div class="sheet-foot"><span class="hint">Änderungen werden sofort gespeichert.</span><button type="button" class="btn primary" data-close>Fertig</button></div>
@@ -1135,8 +1264,8 @@ function renderChannelList(){
     <summary>${starBtn(c)}<span class="chname">${esc(c.title)}</span><span class="hint">${esc(chRuleSummary(c)||"alle Videos")}</span></summary>
     <div class="chbody" data-ch="${c.id}">
       <div class="row">
-        <div class="f"><label>Nur Videos mit</label><input type="text" data-k="include" value="${esc(c.include)}" placeholder="z. B. Oilers, Edmonton"></div>
-        <div class="f"><label>Ohne</label><input type="text" data-k="exclude" value="${esc(c.exclude)}" placeholder="z. B. Podcast, Livestream"></div>
+        <div class="f"><label>Nur Videos mit</label><input type="text" data-k="include" value="${esc(c.include)}" placeholder="z. B. Highlights, Review, Folge"></div>
+        <div class="f"><label>Ohne</label><input type="text" data-k="exclude" value="${esc(c.exclude)}" placeholder="z. B. Livestream, Trailer, Shorts"></div>
       </div>
       <label class="check" style="padding:0"><input type="checkbox" data-k="hideShorts" ${c.hideShorts?"checked":""}> Shorts ausblenden (Videos bis 3 Minuten)</label>
       <div class="row">
@@ -1160,50 +1289,78 @@ function onChannelField(el){
   clearTimeout(chTimer); chTimer=setTimeout(()=>persist(),600);
 }
 
-/* ---------- Playlist importieren (ohne Reihe) ---------- */
+/* ---------- Mehrere Videos / Playlist hinzufügen ---------- */
 let PI=null;
-function openPlaylistImport(url=""){
+function openBulk(text=""){
   PI={pl:null,sel:new Set()}; S.openId=null; S.openSeries=null; S.openFeed=null;
   const opt=list=>`<option value="">–</option>${list.map(x=>`<option>${esc(x)}</option>`).join("")}`;
   $("#layer").innerHTML=`<div class="scrim"></div><div class="modal" data-modalbg><form class="sheet" id="pif" novalidate>
-    <div class="sheet-head"><h2>Playlist importieren</h2><button type="button" class="btn ghost" data-close aria-label="Schließen">✕</button></div>
+    <div class="sheet-head"><h2>Mehrere Videos hinzufügen</h2><button type="button" class="btn ghost" data-close aria-label="Schließen">✕</button></div>
     <div class="sheet-body">
-      <div class="f"><label for="pi-url">Playlist-URL</label>
-        <div class="urlrow"><input type="url" id="pi-url" value="${esc(url)}" placeholder="https://www.youtube.com/playlist?list=…"><button type="button" class="btn" data-piload>Laden</button></div>
-        <span class="hint" id="pi-msg">${S.cfg.ytKey?"Übernimmt die Videos einzeln in deine Bibliothek. Eine Reihe wird nur angelegt, wenn du das unten auswählst.":"Zum Laden von Playlists brauchst du den YouTube-API-Schlüssel (Einstellungen)."}</span></div>
+      <div class="f"><label for="pi-url">Video- oder Playlist-URLs</label>
+        <textarea id="pi-url" class="mono" style="min-height:110px" placeholder="Eine URL pro Zeile. Playlists werden aufgelöst.">${esc(text)}</textarea>
+        <div class="actions" style="align-items:center"><button type="button" class="btn" data-piload>Videos laden</button><span class="hint" id="pi-msg">${S.cfg.ytKey?"Videos und Playlists lassen sich mischen. Eine Reihe entsteht nur, wenn du das unten auswählst.":"Einzelne Videos gehen auch ohne YouTube-API-Schlüssel. Für Playlists brauchst du ihn (Einstellungen)."}</span></div></div>
       <div id="pi-body" hidden>
         <div class="f"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><span class="lbl">Videos</span>
           <span class="actions" style="gap:4px"><button type="button" class="btn ghost" style="padding:2px 8px;font-size:12px" data-pisel="all">Alle</button><button type="button" class="btn ghost" style="padding:2px 8px;font-size:12px" data-pisel="none">Keine</button></span></div>
           <div class="pilist" id="pi-list"></div></div>
         <h3 style="margin-top:14px">Für die neuen Videos</h3>
         <div class="row" style="margin-top:10px">
-          <div class="f"><label for="pi-genre">Genre</label><select id="pi-genre">${opt(S.lists.genres)}</select></div>
-          <div class="f"><label for="pi-format">Format</label><select id="pi-format">${opt(S.lists.formats)}</select></div>
-          <div class="f"><label for="pi-mood">Stimmung</label><select id="pi-mood">${opt(S.lists.moods)}</select></div>
+          <div class="f">${lblHelp("pi-genre","Genre","genres")}<select id="pi-genre">${opt(S.lists.genres)}</select></div>
+          <div class="f">${lblHelp("pi-format","Format","formats")}<select id="pi-format">${opt(S.lists.formats)}</select></div>
+          <div class="f">${lblHelp("pi-mood",moodLabel(),"moods")}<select id="pi-mood">${opt(S.lists.moods)}</select></div>
         </div>
         <div class="f" style="margin-top:12px"><label for="pi-tags">Tags</label><input type="text" id="pi-tags" list="dl-alltags2" placeholder="mit Komma trennen"><datalist id="dl-alltags2">${allTags().map(t=>`<option value="${esc(t[0])}">`).join("")}</datalist></div>
-        <label class="check"><input type="checkbox" id="pi-watched"> Als gesehen markieren (z. B. für eine Playlist, die du schon kennst)</label>
+        <label class="check"><input type="checkbox" id="pi-watched"> Als gesehen markieren</label>
         <label class="check"><input type="checkbox" id="pi-series"> Zusätzlich als Reihe anlegen</label>
+        <div class="f" id="pi-sname-wrap" hidden><label for="pi-sname">Name der Reihe</label><input type="text" id="pi-sname"></div>
       </div>
     </div>
-    <div class="sheet-foot"><span class="hint err" id="pi-err"></span><div class="actions"><button type="button" class="btn ghost" data-close>Abbrechen</button><button type="submit" class="btn primary" id="pi-go" disabled>Übernehmen</button></div></div>
+    <div class="sheet-foot"><span class="hint err" id="pi-err"></span><div class="actions"><button type="button" class="btn ghost" data-close>Abbrechen</button><button type="submit" class="btn primary" id="pi-go" disabled>Hinzufügen</button></div></div>
   </form></div>`;
-  $("#pi-url").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); piLoad(); } });
   $("#pif").addEventListener("submit",e=>{ e.preventDefault(); piImport(); });
   $("#pi-list").addEventListener("change",e=>{ const id=e.target.dataset.pick; if(!id) return; e.target.checked?PI.sel.add(id):PI.sel.delete(id); piCount(); });
-  if(url) piLoad(); else $("#pi-url").focus();
+  if(text.trim()) piLoad(); else $("#pi-url").focus();
+}
+const openPlaylistImport=openBulk;
+function parseBulk(text){
+  const items=[];
+  for(const tok of (text||"").split(/[\s,;]+/).map(t=>t.trim()).filter(Boolean)){
+    const vid=parseId(tok), pid=parsePlaylistId(tok);
+    if(vid&&(/youtu/i.test(tok)||/^[\w-]{11}$/.test(tok))) items.push({v:vid});
+    else if(pid) items.push({p:pid});
+    else items.push({bad:tok});
+  }
+  return items;
 }
 async function piLoad(){
-  const msg=$("#pi-msg"), btn=$("[data-piload]"); const pid=parsePlaylistId($("#pi-url").value);
-  if(!pid){ msg.className="hint err"; msg.textContent="Das ist keine Playlist-URL. Sie enthält normalerweise „list=“."; return; }
+  const msg=$("#pi-msg"), btn=$("[data-piload]"); const items=parseBulk($("#pi-url").value);
+  const good=items.filter(x=>!x.bad);
+  if(!good.length){ msg.className="hint err"; msg.textContent="Keine YouTube-URL erkannt. Füge eine Video- oder Playlist-URL pro Zeile ein."; return; }
   btn.disabled=true; btn.textContent="Lade …"; msg.className="hint";
-  try{ const pl=await fetchPlaylist(pid,n=>msg.textContent=`${n} Videos gefunden …`);
-    PI.pl={pid,...pl}; PI.sel=new Set(pl.ids.filter(id=>!S.videos.has(id)&&!pl.meta.get(id)?.gone));
-    const known=pl.ids.length-pl.ids.filter(id=>!S.videos.has(id)).length;
-    msg.className="hint ok"; msg.textContent=`„${pl.title}“ von ${pl.channel}: ${plur(pl.ids.length,"Video","Videos")}${known?`, ${known===1?"1 davon ist":known+" davon sind"} schon in deiner Bibliothek`:""}.`;
-    $("#pi-body").hidden=false; piList(); piCount();
-  }catch(e){ msg.className="hint err"; msg.textContent=e.msg||"Die Playlist konnte nicht geladen werden."; }
-  btn.disabled=false; btn.textContent="Laden";
+  const ids=[], meta=new Map(), errs=[]; let plInfo=null, plCount=0;
+  const add=id=>{ if(!ids.includes(id)) ids.push(id); };
+  try{
+    const singles=good.filter(x=>x.v).map(x=>x.v);
+    const singleMeta=singles.length?await fetchMeta([...new Set(singles)]):new Map();
+    for(const it of good){
+      if(it.v){ add(it.v); if(!meta.has(it.v)) meta.set(it.v,singleMeta.get(it.v)??{gone:true}); }
+      else { try{ const pl=await fetchPlaylist(it.p,n=>msg.textContent=`${n} Videos gefunden …`); plCount++; plInfo={pid:it.p,...pl};
+          for(const id of pl.ids){ add(id); if(!meta.has(id)) meta.set(id,pl.meta.get(id)); } }
+        catch(e){ errs.push(e.msg||"Playlist konnte nicht geladen werden."); } }
+    }
+  }catch(e){ errs.push(e.msg||"Die Videodaten konnten nicht geladen werden."); }
+  btn.disabled=false; btn.textContent="Videos laden";
+  if(!ids.length){ msg.className="hint err"; msg.textContent=errs[0]||"Keine Videos gefunden."; return; }
+  const onlyOnePl=plCount===1&&!good.some(x=>x.v);
+  PI.pl={ids,meta,pid:onlyOnePl?plInfo.pid:"",title:plCount===1?plInfo.title:"",description:onlyOnePl?plInfo.description:""};
+  PI.sel=new Set(ids.filter(id=>!S.videos.has(id)&&!meta.get(id)?.gone));
+  const known=ids.filter(id=>S.videos.has(id)).length, bad=items.filter(x=>x.bad).length;
+  msg.className=errs.length?"hint err":"hint ok";
+  msg.textContent=[`${plur(ids.length,"Video","Videos")} gefunden`+(plCount?` (davon aus ${plur(plCount,"Playlist","Playlists")})`:""),
+    known?`${known===1?"1 ist":known+" sind"} schon in der Videothek`:"", bad?`${plur(bad,"Zeile","Zeilen")} ohne YouTube-URL übersprungen`:"", ...errs].filter(Boolean).join(". ")+".";
+  $("#pi-sname").value=PI.pl.title||"";
+  $("#pi-body").hidden=false; piList(); piCount();
 }
 function piList(){
   const pl=PI.pl;
@@ -1211,33 +1368,200 @@ function piList(){
     const v={id,title:m.title||"",creator:m.creator||"",duration:m.duration};
     return `<label class="pirow ${inLib||m.gone?"off":""}"><input type="checkbox" data-pick="${id}" ${PI.sel.has(id)?"checked":""} ${inLib?"disabled":""}>
       <span class="num mono">${i+1}</span>${coverHTML(v,{badges:false})}
-      <span style="min-width:0"><b>${esc(v.title||"Ohne Titel")}</b><small>${esc([v.creator,v.duration?fmtDur(v.duration):"",inLib?"schon in der Videothek":m.gone?"gelöscht oder privat":""].filter(Boolean).join(" · "))}</small></span></label>`; }).join("");
+      <span style="min-width:0"><b>${esc(v.title||(m.gone?"Nicht gefunden":"Ohne Titel"))}</b><small>${esc([v.creator,v.duration?fmtDur(v.duration):"",inLib?"schon in der Videothek":m.gone?"gelöscht, privat oder falsche URL":""].filter(Boolean).join(" · "))}</small></span></label>`; }).join("");
 }
-function piCount(){ const n=PI.sel.size; const b=$("#pi-go"); b.disabled=!n&&!$("#pi-series").checked; b.textContent=n?`${plur(n,"Video","Videos")} übernehmen`:"Übernehmen"; }
+function piCount(){ const n=PI.sel.size, asS=$("#pi-series").checked; $("#pi-sname-wrap").hidden=!asS; const b=$("#pi-go"); b.disabled=!n&&!asS; b.textContent=n?`${plur(n,"Video","Videos")} hinzufügen`:"Hinzufügen"; }
 function piImport(){
   const pl=PI.pl; if(!pl) return;
+  const asSeries=$("#pi-series").checked, sname=$("#pi-sname").value.trim();
+  if(asSeries&&!sname){ $("#pi-err").textContent="Gib der Reihe einen Namen."; $("#pi-sname").focus(); return; }
   const def={genre:$("#pi-genre").value,format:$("#pi-format").value,mood:$("#pi-mood").value,
     tags:[...new Set($("#pi-tags").value.split(",").map(t=>t.trim().toLowerCase().replace(/\s+/g," ")).filter(Boolean))]};
-  const watched=$("#pi-watched").checked, asSeries=$("#pi-series").checked;
+  const watched=$("#pi-watched").checked;
   const ids=pl.ids.filter(id=>PI.sel.has(id)&&!S.videos.has(id));
-  ids.forEach((id,i)=>{ const v=newVideo(id,pl.meta.get(id),def,ids.length-i); if(watched) v.watched=true; S.videos.set(id,v); S.deleted.delete(id); });
+  const needMeta=[];
+  ids.forEach((id,i)=>{ const m=pl.meta.get(id); const v=newVideo(id,m&&!m.gone?m:undefined,def,ids.length-i); if(watched) v.watched=true; S.videos.set(id,v); S.deleted.delete(id); if(!m||!m.title) needMeta.push(id); });
   let sid=null;
   if(asSeries){ const now=Date.now(); sid="s"+now.toString(36)+Math.random().toString(36).slice(2,6);
-    S.series.set(sid,{id:sid,name:pl.title,kind:"Playlist",description:(pl.description||"").slice(0,1500),playlistId:pl.pid,
+    S.series.set(sid,{id:sid,name:sname,kind:pl.pid?"Playlist":"Serie",description:(pl.description||"").slice(0,1500),playlistId:pl.pid||"",
       videoIds:pl.ids.filter(id=>S.videos.has(id)),defaults:def,addedAt:now,updatedAt:now}); }
   persist(); closeLayer();
   if(sid){ S.view="series"; lsSet("vt-view","series"); render(); openSeriesDrawer(sid); }
   else { S.view="videos"; lsSet("vt-view","videos"); S.sort="added"; $("#sort").value="added"; lsSet("vt-sort","added"); render(); }
-  toast(ids.length?`${plur(ids.length,"Video","Videos")} übernommen`:"Reihe angelegt");
+  toast(ids.length?`${plur(ids.length,"Video","Videos")} hinzugefügt`:"Reihe angelegt");
+  if(needMeta.length) enrichStubs(needMeta);
+}
+
+/* ---------- Werte umbenennen (Videos, Kanäle, Reihen) ---------- */
+function applyValueMap(maps){
+  let n=0; const now=Date.now();
+  for(const v of [...S.videos.values()]){ const p={};
+    for(const f of ["genre","format","mood"]){ const to=maps[f]?.[v[f]]; if(v[f]&&to!==undefined&&to!==v[f]) p[f]=to; }
+    if(Object.keys(p).length){ S.videos.set(v.id,{...v,...p,updatedAt:now}); n++; } }
+  for(const c of [...S.channels.values()]){ const p={};
+    for(const f of ["genre","format"]){ const to=maps[f]?.[c[f]]; if(c[f]&&to!==undefined&&to!==c[f]) p[f]=to; }
+    if(Object.keys(p).length) S.channels.set(c.id,{...c,...p,updatedAt:now}); }
+  for(const x of [...S.series.values()]){ const d={...(x.defaults||{})}; let ch=false;
+    for(const f of ["genre","format","mood"]){ const to=maps[f]?.[d[f]]; if(d[f]&&to!==undefined&&to!==d[f]){ d[f]=to; ch=true; } }
+    if(ch) S.series.set(x.id,{...x,defaults:d,updatedAt:now}); }
+  for(const f of ["genre","format","mood"]) S.f[f].clear();
+  return n;
+}
+function oldValues(){ // Werte an Videos, die in keiner Liste mehr stehen
+  const out={genre:new Map(),format:new Map(),mood:new Map()};
+  for(const v of S.videos.values()) for(const [lk,f] of LIST_KEYS) if(v[f]&&!S.lists[lk].includes(v[f])) out[f].set(v[f],(out[f].get(v[f])||0)+1);
+  return out;
+}
+const isOldVal=(lk,val)=>!!val&&!S.lists[lk].includes(val);
+
+/* ---------- Listen & Einordnung ---------- */
+let LE=null;
+function openLists(tab){ if(!["genres","formats","moods"].includes(tab)) tab="genres";
+  LE={tab,label:S.lists.moodLabel||"Stimmung",rows:{},recOpen:false};
+  for(const [lk] of LIST_KEYS) LE.rows[lk]=S.lists[lk].map(n=>({orig:n,name:n,desc:descOf(lk,n)}));
+  S.openId=null; S.openSeries=null; S.openFeed=null;
+  $("#layer").innerHTML=`<div class="scrim"></div><div class="modal" data-modalbg><form class="sheet" id="lf" style="width:min(820px,100%)" novalidate>
+    <div class="sheet-head"><h2>Listen & Einordnung</h2><button type="button" class="btn ghost" data-close aria-label="Schließen">✕</button></div>
+    <div class="sheet-body">
+      <div class="plbox"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">
+        <div style="min-width:0;flex:1 1 260px"><b>Empfohlene Einteilung</b><div class="hint">${RECOMMENDED.genres.length} Genres, ${RECOMMENDED.formats.length} Formate und ${RECOMMENDED.moods.length} Stufen „${RECOMMENDED.moodLabel}“, mit Einordnungshilfe zu jedem Eintrag.</div></div>
+        <div class="actions"><button type="button" class="btn" data-help="rules">Einordnungshilfe</button><button type="button" class="btn" data-lerec>Vorschau & übernehmen</button></div></div>
+        <div id="le-rec"></div></div>
+      <div class="seg" id="le-tabs" style="max-width:420px"></div>
+      <div id="le-pane"></div>
+      <p class="hint" style="margin:0">Umbenennen ändert alle Videos, Kanal- und Reihen-Standardwerte mit diesem Wert. Gibst du einem Eintrag den Namen eines anderen, werden beide zusammengeführt. Entfernte Einträge bleiben an den Videos stehen und sind in den Filtern als „alt“ markiert.</p>
+    </div>
+    <div class="sheet-foot"><span class="hint err" id="le-err"></span><div class="actions"><button type="button" class="btn ghost" data-close>Abbrechen</button><button type="submit" class="btn primary">Speichern</button></div></div>
+  </form></div>`;
+  $("#lf").addEventListener("submit",e=>{ e.preventDefault(); leSave(); });
+  $("#lf").addEventListener("input",e=>{ const t=e.target; const i=t.dataset.i;
+    if(t.id==="le-label"){ LE.label=t.value; leTabs(); return; }
+    if(i===undefined) return; const row=LE.rows[LE.tab][+i]; if(t.classList.contains("le-name")) row.name=t.value; else row.desc=t.value; });
+  leTabs(); lePane();
+}
+function leTabs(){ $("#le-tabs").innerHTML=[["genres","Genre"],["formats","Format"],["moods",LE.label||"Stimmung"]].map(([k,l])=>`<button type="button" data-letab="${k}" class="${LE.tab===k?"on":""}">${esc(l)} <span class="mono" style="opacity:.6">${LE.rows[k].length}</span></button>`).join(""); }
+function lePane(){
+  const f={genres:"genre",formats:"format",moods:"mood"}[LE.tab];
+  const cnt=new Map(); for(const v of S.videos.values()) if(v[f]) cnt.set(v[f],(cnt.get(v[f])||0)+1);
+  const rows=LE.rows[LE.tab];
+  $("#le-pane").innerHTML=`${LE.tab==="moods"?`<div class="f" style="margin-bottom:12px"><label for="le-label">Name dieser Kategorie</label><input type="text" id="le-label" value="${esc(LE.label)}" placeholder="z. B. Stimmung oder Anspruch"></div>`:""}
+    <div class="lerows">${rows.map((r,i)=>`<div class="lerow"><div class="lerow-top">
+        <input type="text" class="le-name" data-i="${i}" value="${esc(r.name)}" aria-label="Name">
+        <span class="hint mono" style="white-space:nowrap">${r.orig?plur(cnt.get(r.orig)||0,"Video","Videos"):"neu"}</span>
+        <span class="pact"><button type="button" data-lemv="-1" data-i="${i}" ${i===0?"disabled":""} aria-label="Nach oben">↑</button><button type="button" data-lemv="1" data-i="${i}" ${i===rows.length-1?"disabled":""} aria-label="Nach unten">↓</button><button type="button" data-lerm="${i}" aria-label="Entfernen" title="Entfernen">✕</button></span></div>
+        <textarea class="le-desc" data-i="${i}" rows="2" placeholder="Einordnungshilfe (optional). Erste Zeile: kurze Beschreibung. Weitere Zeilen z. B. „Dazu: …“, „Nicht: … → anderer Eintrag“.">${esc(r.desc)}</textarea></div>`).join("")||'<p class="hint">Noch keine Einträge.</p>'}</div>
+    <button type="button" class="btn" data-leadd style="margin-top:8px">+ Eintrag</button>`;
+}
+function leSave(){
+  const lists={moodLabel:(LE.label||"").trim()||"Stimmung",desc:{genres:{},formats:{},moods:{}}}; const maps={genre:{},format:{},mood:{}};
+  for(const [lk,f] of LIST_KEYS){
+    const names=[];
+    for(const r of LE.rows[lk]){ const n=r.name.trim().replace(/\s+/g," "); if(!n) continue;
+      if(r.orig&&n!==r.orig) maps[f][r.orig]=n;
+      if(!names.includes(n)) names.push(n);
+      if(r.desc.trim()&&!lists.desc[lk][n]) lists.desc[lk][n]=r.desc.trim(); }
+    lists[lk]=names;
+  }
+  const n=applyValueMap(maps);
+  S.lists=lists; S.listsUpdatedAt=Date.now(); persist(); closeLayer(); render();
+  toast(n?`Listen gespeichert, ${plur(n,"Video","Videos")} angepasst`:"Listen gespeichert");
+}
+function lePreview(){
+  const box=$("#le-rec"); const m=RECOMMENDED_MAP; let auto=0; const keep={genre:new Map(),format:new Map(),mood:new Map()};
+  for(const v of S.videos.values()){ let a=false;
+    for(const [lk,f] of LIST_KEYS){ const val=v[f]; if(!val) continue; const to=m[f][val];
+      if(to!==undefined){ if(to!==val) a=true; } else if(!RECOMMENDED[lk].includes(val)) keep[f].set(val,(keep[f].get(val)||0)+1); }
+    if(a) auto++; }
+  const keepTxt=[["genre","Genre"],["format","Format"],["mood",moodLabel()]].map(([f,l])=>keep[f].size?`<li><b>${l}:</b> ${[...keep[f]].map(([k,c])=>`${esc(k)} (${c})`).join(", ")}</li>`:"").join("");
+  box.innerHTML=`<div class="recprev">
+    <div class="recgrid">${[["genres","Genre"],["formats","Format"],["moods",RECOMMENDED.moodLabel]].map(([lk,l])=>`<div><div class="lbl">${l}</div><ul>${RECOMMENDED[lk].map(x=>`<li title="${esc(firstLine(RECOMMENDED.desc[lk][x]))}">${esc(x)}</li>`).join("")}</ul></div>`).join("")}</div>
+    <p style="margin:0">${S.videos.size?`${plur(auto,"Video wird","Videos werden")} automatisch umbenannt.`:"Deine Bibliothek ist noch leer."}</p>
+    ${keepTxt?`<div><p style="margin:0 0 4px">Diese Werte lassen sich nicht eindeutig zuordnen und bleiben vorerst stehen. Du findest sie danach in der Seitenleiste unter „Einordnen → Alte Werte“ und kannst sie mit „Videos bearbeiten“ gesammelt neu setzen:</p><ul class="keep">${keepTxt}</ul></div>`:""}
+    <p class="hint" style="margin:0">Deine bisherigen Listen und Beschreibungen werden ersetzt. Eigene Einträge kannst du danach wieder hinzufügen.</p>
+    <div class="actions"><button type="button" class="btn primary" data-lerecgo>Empfohlene Einteilung übernehmen</button><button type="button" class="btn ghost" data-lerecno>Abbrechen</button></div></div>`;
+}
+function applyRecommended(){
+  const maps={}; for(const f of ["genre","format","mood"]) maps[f]=Object.fromEntries(Object.entries(RECOMMENDED_MAP[f]).filter(([a,b])=>a!==b));
+  const n=applyValueMap(maps);
+  S.lists=structuredClone({genres:RECOMMENDED.genres,formats:RECOMMENDED.formats,moods:RECOMMENDED.moods,moodLabel:RECOMMENDED.moodLabel,desc:RECOMMENDED.desc});
+  S.listsUpdatedAt=Date.now(); persist(); closeLayer();
+  const old=oldValues(); const nOld=[...S.videos.values()].filter(v=>LIST_KEYS.some(([lk,f])=>isOldVal(lk,v[f]))).length;
+  if(nOld){ S.view="videos"; lsSet("vt-view","videos"); clearVideoFilters(); S.f.todo="old"; }
+  render(); toast(`Einteilung übernommen${n?`, ${plur(n,"Video","Videos")} umbenannt`:""}${nOld?`. ${nOld} mit alten Werten werden angezeigt`:""}`);
+}
+function clearVideoFilters(){ for(const k of ["genre","format","creator","tags","mood","status","series"]) S.f[k].clear(); S.f.watched="all"; S.f.rx="all"; S.f.todo=""; }
+
+/* ---------- Einordnungshilfe (über allem) ---------- */
+function openHelp(section="rules"){
+  const sec=(lk,title)=>`<section id="help-${lk}"><h3>${esc(title)}</h3>${S.lists[lk].map(x=>`<div class="g-item"><h4>${esc(x)}</h4>${descOf(lk,x)?fmtGuideText(descOf(lk,x)):'<p class="hint">Noch keine Beschreibung. Ergänze sie unter „Listen“.</p>'}</div>`).join("")||'<p class="hint">Keine Einträge.</p>'}</section>`;
+  $("#layer2").innerHTML=`<div class="scrim" style="z-index:24"></div><div class="modal" data-helpbg style="z-index:25"><div class="sheet help" style="width:min(820px,100%)">
+    <div class="sheet-head"><h2>Einordnungshilfe</h2><button type="button" class="btn ghost" data-closehelp aria-label="Schließen">✕</button></div>
+    <nav class="helpnav">${[["rules","Grundregeln"],["genres","Genre"],["formats","Format"],["moods",moodLabel()],["tags","Tags"]].map(([k,l])=>`<button type="button" class="chip ${k===section?"on":""}" data-helpgo="${k}">${esc(l)}</button>`).join("")}</nav>
+    <div class="sheet-body helpbody">
+      <section id="help-rules"><h3>Grundregeln</h3>${GUIDE_RULES.map(([h,t])=>`<div class="g-item"><h4>${esc(h)}</h4><p>${esc(t)}</p></div>`).join("")}</section>
+      ${sec("genres","Genre: Worum geht es?")}${sec("formats","Format: Wie ist es gemacht?")}${sec("moods",`${moodLabel()}: ${moodLabel()==="Anspruch"?"Wie viel Aufmerksamkeit braucht es?":"Wie fühlt es sich an?"}`)}
+      <section id="help-tags"><h3>Tags: Wer und was genau?</h3><ul class="g-list">${GUIDE_TAGS.map(t=>`<li>${esc(t)}</li>`).join("")}</ul></section>
+    </div>
+    <div class="sheet-foot"><button type="button" class="btn ghost" data-helplists>Beschreibungen bearbeiten</button><button type="button" class="btn primary" data-closehelp>Schließen</button></div></div></div>`;
+  helpGo(section);
+}
+function helpGo(k){ const el=document.getElementById("help-"+k), body=$(".helpbody"); if(el&&body) body.scrollTop=el.offsetTop-4;
+  document.querySelectorAll(".helpnav .chip").forEach(c=>c.classList.toggle("on",c.dataset.helpgo===k)); }
+function closeHelp(){ $("#layer2").innerHTML=""; }
+function lblHelp(id,text,lk){ return `<div class="lblrow"><label for="${id}">${esc(text)}</label><button type="button" class="qbtn" data-help="${lk}" aria-label="Einordnungshilfe: ${esc(text)}" title="Einordnungshilfe">?</button></div>`; }
+function selHint(sel){ const lk=sel.dataset.lk; const h=document.getElementById(sel.id+"-h"); if(!h||!lk) return;
+  const val=sel.value; h.textContent=val?(isOldVal(lk,val)?"Alter Wert, steht nicht mehr in deiner Liste.":firstLine(descOf(lk,val))):""; h.classList.toggle("err",isOldVal(lk,val)); }
+
+/* ---------- Mehrere Videos auf einmal bearbeiten ---------- */
+let BE=null;
+function openBulkEdit(){
+  const ids=sorted([...S.videos.values()].filter(v=>matches(v))).map(v=>v.id); if(!ids.length) return;
+  BE={ids};
+  const opt=(lk)=>`<option value="__keep">– nicht ändern –</option><option value="">(leeren)</option>${S.lists[lk].map(x=>`<option>${esc(x)}</option>`).join("")}`;
+  $("#layer").innerHTML=`<div class="scrim"></div><div class="modal" data-modalbg><form class="sheet" id="bef" novalidate>
+    <div class="sheet-head"><h2>${plur(ids.length,"Video","Videos")} bearbeiten</h2><button type="button" class="btn ghost" data-close aria-label="Schließen">✕</button></div>
+    <div class="sheet-body">
+      <p class="hint" style="margin:0">Gilt für alle Videos, die gerade zu Suche und Filtern passen. Felder auf „nicht ändern“ bleiben, wie sie sind.</p>
+      <div class="row">
+        <div class="f">${lblHelp("be-genre","Genre","genres")}<select id="be-genre" data-lk="genres">${opt("genres")}</select><span class="hint ghint" id="be-genre-h"></span></div>
+        <div class="f">${lblHelp("be-format","Format","formats")}<select id="be-format" data-lk="formats">${opt("formats")}</select><span class="hint ghint" id="be-format-h"></span></div>
+        <div class="f">${lblHelp("be-mood",moodLabel(),"moods")}<select id="be-mood" data-lk="moods">${opt("moods")}</select><span class="hint ghint" id="be-mood-h"></span></div>
+      </div>
+      <div class="row">
+        <div class="f"><label for="be-tadd">Tags hinzufügen</label><input type="text" id="be-tadd" list="dl-alltags3" placeholder="mit Komma trennen"></div>
+        <div class="f"><label for="be-trm">Tags entfernen</label><input type="text" id="be-trm" list="dl-alltags3" placeholder="mit Komma trennen"></div>
+        <datalist id="dl-alltags3">${allTags().map(t=>`<option value="${esc(t[0])}">`).join("")}</datalist>
+      </div>
+      <div class="row">
+        <div class="f"><label for="be-watched">Gesehen</label><select id="be-watched"><option value="__keep">– nicht ändern –</option><option value="1">Gesehen</option><option value="0">Ungesehen</option></select></div>
+        <div class="f"><label for="be-status">Status</label><select id="be-status"><option value="__keep">– nicht ändern –</option>${STATUSES.map(s=>`<option>${s}</option>`).join("")}</select></div>
+      </div>
+      <details class="bepeek"><summary class="hint">Betroffene Videos anzeigen</summary><div class="linklist" style="margin-top:8px">${ids.slice(0,60).map(id=>miniHTML(S.videos.get(id),"data-noop")).join("")}${ids.length>60?`<span class="hint">… und ${ids.length-60} weitere</span>`:""}</div></details>
+    </div>
+    <div class="sheet-foot"><span class="hint err" id="be-err"></span><div class="actions"><button type="button" class="btn ghost" data-close>Abbrechen</button><button type="submit" class="btn primary">Auf ${plur(ids.length,"Video","Videos")} anwenden</button></div></div>
+  </form></div>`;
+  $("#bef").addEventListener("submit",e=>{ e.preventDefault(); beApply(); });
+}
+function beApply(){
+  const tl=s=>[...new Set($(s).value.split(",").map(t=>t.trim().toLowerCase().replace(/\s+/g," ")).filter(Boolean))];
+  const set={}; for(const f of ["genre","format","mood","status"]){ const val=$("#be-"+f).value; if(val!=="__keep") set[f]=val; }
+  const w=$("#be-watched").value; if(w!=="__keep") set.watched=w==="1";
+  const tadd=tl("#be-tadd"), trm=tl("#be-trm");
+  if(!Object.keys(set).length&&!tadd.length&&!trm.length){ $("#be-err").textContent="Du hast noch nichts zum Ändern ausgewählt."; return; }
+  const now=Date.now(); let n=0;
+  for(const id of BE.ids){ const v=S.videos.get(id); if(!v) continue;
+    let tags=(v.tags||[]).filter(t=>!trm.includes(t)); for(const t of tadd) if(!tags.includes(t)) tags.push(t);
+    S.videos.set(id,{...v,...set,tags,updatedAt:now}); n++; }
+  persist(); closeLayer(); render(); toast(`${plur(n,"Video","Videos")} geändert`);
 }
 
 /* ================= Bearbeiten ================= */
 let E=null;
 function openEditor(id,prefillUrl){
   const v=id?S.videos.get(id):null;
-  E={ isNew:!v, id:v?.id||null, tags:[...(v?.tags||[])], reactsTo:[...(v?.reactsTo||[])], stubs:new Map(), rxQ:"", autoFetched:null, channelId:v?.channelId||"", desc:undefined, sugg:null };
+  E={ isNew:!v, id:v?.id||null, tags:[...(v?.tags||[])], reactsTo:[...(v?.reactsTo||[])], stubs:new Map(), rxQ:"", autoFetched:null, channelId:v?.channelId||"", desc:undefined, sugg:null, ext:v?.extOrig?{on:true,note:v.extOrig.note||"",url:v.extOrig.url||""}:null };
   S.openId=null; S.playing=false;
-  const opt=(list,val)=>`<option value="">–</option>${[...new Set([...list,...(val&&!list.includes(val)?[val]:[])])].map(x=>`<option ${x===val?"selected":""}>${esc(x)}</option>`).join("")}`;
+  const opt=(list,val)=>`<option value="">–</option>${[...new Set([...list,...(val&&!list.includes(val)?[val]:[])])].map(x=>`<option value="${esc(x)}" ${x===val?"selected":""}>${esc(x)}${list.includes(x)?"":" (alt)"}</option>`).join("")}`;
   $("#layer").innerHTML=`<div class="scrim"></div>
   <div class="modal" data-modalbg><form class="sheet" id="ed" novalidate>
     <div class="sheet-head"><h2>${v?"Video bearbeiten":"Video hinzufügen"}</h2><button type="button" class="btn ghost" data-close aria-label="Schließen">✕</button></div>
@@ -1245,7 +1569,7 @@ function openEditor(id,prefillUrl){
       <div class="f"><label for="e-url">YouTube-URL</label>
         <div class="urlrow"><input type="url" id="e-url" placeholder="https://www.youtube.com/watch?v=…" value="${esc(v?ytUrl(v.id):prefillUrl||"")}" ${v?"readonly":""}>
         <button type="button" class="btn" id="e-fetch">Daten holen</button></div>
-        ${v?"":`<span class="hint">Ganze Playlist? <button type="button" class="btn ghost" style="padding:0 4px;color:var(--accent)" data-plimport>Playlist importieren</button></span>`}
+        ${v?"":`<span class="hint">Mehrere Videos oder eine Playlist? <button type="button" class="btn ghost" style="padding:0 4px;color:var(--accent)" data-bulk>Mehrere hinzufügen</button> · Du kannst auch mehrere Zeilen einfügen.</span>`}
         <div class="hint" id="e-urlhint">${v?"Die URL bleibt fest. Zum Ändern das Video löschen und neu anlegen.":S.cfg.ytKey?"Titel, Creator, Upload und Dauer werden beim Einfügen automatisch geholt.":"Titel und Creator werden beim Einfügen automatisch geholt."}</div>
       </div>
       <div class="f"><label for="e-title">Titel</label><input type="text" id="e-title" value="${esc(v?.title)}"></div>
@@ -1256,9 +1580,9 @@ function openEditor(id,prefillUrl){
         <div class="f"><label for="e-dur">Dauer</label><input type="text" id="e-dur" class="mono" placeholder="12:34" value="${v?.duration?fmtDur(v.duration):""}"></div>
       </div>
       <div class="row">
-        <div class="f"><label for="e-genre">Genre</label><select id="e-genre">${opt(S.lists.genres,v?.genre)}</select></div>
-        <div class="f"><label for="e-format">Format</label><select id="e-format">${opt(S.lists.formats,v?.format)}</select></div>
-        <div class="f"><label for="e-mood">Stimmung</label><select id="e-mood">${opt(S.lists.moods,v?.mood)}</select></div>
+        <div class="f">${lblHelp("e-genre","Genre","genres")}<select id="e-genre" data-lk="genres">${opt(S.lists.genres,v?.genre)}</select><span class="hint ghint" id="e-genre-h"></span></div>
+        <div class="f">${lblHelp("e-format","Format","formats")}<select id="e-format" data-lk="formats">${opt(S.lists.formats,v?.format)}</select><span class="hint ghint" id="e-format-h"></span></div>
+        <div class="f">${lblHelp("e-mood",moodLabel(),"moods")}<select id="e-mood" data-lk="moods">${opt(S.lists.moods,v?.mood)}</select><span class="hint ghint" id="e-mood-h"></span></div>
       </div>
       <div class="f"><span class="lbl">Tags</span><div class="tagbox" id="e-tagbox"></div><div class="sugg" id="e-sugg"></div></div>
       <div id="e-rx"></div>
@@ -1271,7 +1595,10 @@ function openEditor(id,prefillUrl){
     <div class="sheet-foot"><span class="hint err" id="e-err"></span><div class="actions"><button type="button" class="btn ghost" data-close>Abbrechen</button><button type="submit" class="btn primary">${v?"Speichern":"Hinzufügen"}</button></div></div>
   </form></div>`;
   renderTags(); renderRx();
+  document.querySelectorAll("#ed select[data-lk]").forEach(selHint);
   const url=$("#e-url");
+  url.addEventListener("paste",e=>{ const txt=e.clipboardData?.getData("text")||""; const it=parseBulk(txt).filter(x=>!x.bad);
+    if(!E.id&&(it.length>1||(it.length===1&&it[0].p))){ e.preventDefault(); openBulk(txt); } });
   if(!v){ url.focus(); url.addEventListener("input",checkUrl); if(prefillUrl) checkUrl(); } else $("#e-title").focus();
   $("#e-format").addEventListener("change",renderRx);
   $("#e-fetch").addEventListener("click",()=>autofill(true));
@@ -1327,7 +1654,7 @@ function addTag(raw){ const t=raw.replace(/,/g," ").trim().toLowerCase().replace
 
 function renderRx(){
   const wrap=$("#e-rx"); if(!wrap) return;
-  if(!($("#e-format").value==="Reaction"||E.reactsTo.length)){ wrap.innerHTML=""; return; }
+  if(!(isRxFormat($("#e-format").value)||E.reactsTo.length||E.ext?.on)){ wrap.innerHTML=""; return; }
   wrap.innerHTML=`<div class="f"><span class="lbl">Reaction auf</span><div class="rxbox">
     <div class="linklist">${E.reactsTo.map(id=>{const o=S.videos.get(id)||E.stubs.get(id)||{id};
       const shown={...o,title:o.title||(E.stubs.has(id)?"Neues Original (wird mit angelegt)":"")};
@@ -1336,7 +1663,13 @@ function renderRx(){
     <input class="small-in" id="e-rxq" placeholder="Original suchen oder dessen YouTube-URL einfügen" value="${esc(E.rxQ)}" autocomplete="off" style="margin:0">
     <div class="rxres" id="e-rxres"></div>
     <span class="hint ok" id="e-rxmsg"></span>
+    <label class="check" style="padding:0"><input type="checkbox" id="e-ext" ${E.ext?.on?"checked":""}> Original ist kein YouTube-Video</label>
+    ${E.ext?.on?`<div class="row"><div class="f"><label for="e-extnote">Was ist das Original?</label><input type="text" id="e-extnote" value="${esc(E.ext.note)}" placeholder="z. B. Twitch-Stream, TV-Sendung, Artikel, Film"></div>
+      <div class="f"><label for="e-exturl">Link (optional)</label><input type="url" id="e-exturl" value="${esc(E.ext.url)}" placeholder="https://…"></div></div>`:""}
   </div></div>`;
+  $("#e-ext").addEventListener("change",ev=>{ E.ext={note:"",url:"",...(E.ext||{}),on:ev.target.checked}; renderRx(); if(E.ext.on) $("#e-extnote").focus(); });
+  $("#e-extnote")?.addEventListener("input",ev=>E.ext.note=ev.target.value);
+  $("#e-exturl")?.addEventListener("input",ev=>E.ext.url=ev.target.value);
   const q=$("#e-rxq"); q.addEventListener("input",()=>{E.rxQ=q.value;renderRxRes();}); renderRxRes();
 }
 /* ---------- Originale aus der Beschreibung ---------- */
@@ -1362,8 +1695,9 @@ async function suggestOriginals({auto,title}={}){
   }catch(e){ E.sugg=null; if(!auto){ const h=$("#e-urlhint"); h.className="hint err"; h.textContent=e.msg||"Die Beschreibung konnte nicht geladen werden."; } return; }
   if(!$("#e-format")) return;
   const fmt=$("#e-format"), looksRx=/react|reagier|reaktion/i.test(title||$("#e-title").value);
-  if(auto&&E.sugg.length&&!fmt.value&&looksRx&&[...fmt.options].some(o=>o.value==="Reaction")){ fmt.value="Reaction"; const h=$("#e-urlhint"); h.textContent+=` Sieht nach einer Reaction aus: Format gesetzt, ${plur(E.sugg.length,"verlinktes Video","verlinkte Videos")} unten als Original vorgeschlagen.`; }
-  else if(auto&&E.sugg.length&&fmt.value!=="Reaction"){ const h=$("#e-urlhint"); h.insertAdjacentHTML("beforeend",` In der Beschreibung ${E.sugg.length===1?"ist 1 Video":`sind ${E.sugg.length} Videos`} verlinkt. <button type="button" class="btn ghost" style="padding:0 4px;color:var(--accent)" data-asrx>Als Reaction markieren</button>`); }
+  const rxo=[...fmt.options].find(o=>isRxFormat(o.value));
+  if(auto&&E.sugg.length&&!fmt.value&&looksRx&&rxo){ fmt.value=rxo.value; selHint(fmt); const h=$("#e-urlhint"); h.textContent+=` Sieht nach einer Reaction aus: Format gesetzt, ${plur(E.sugg.length,"verlinktes Video","verlinkte Videos")} unten als Original vorgeschlagen.`; }
+  else if(auto&&E.sugg.length&&!isRxFormat(fmt.value)){ const h=$("#e-urlhint"); h.insertAdjacentHTML("beforeend",` In der Beschreibung ${E.sugg.length===1?"ist 1 Video":`sind ${E.sugg.length} Videos`} verlinkt. <button type="button" class="btn ghost" style="padding:0 4px;color:var(--accent)" data-asrx>Als Reaction markieren</button>`); }
   renderRx();
 }
 function pickSuggestion(id){
@@ -1411,7 +1745,7 @@ async function save(){
   const data={ ...prev, id, title:$("#e-title").value.trim(), creator:$("#e-creator").value.trim(), uploadDate:$("#e-upload").value||"",
     duration:dur, genre:$("#e-genre").value, format:$("#e-format").value, mood:$("#e-mood").value, tags:E.tags,
     status:$("#e-status").value, watched:$("#e-watched").checked, notes:$("#e-notes").value.trim(),
-    reactsTo:E.reactsTo.filter(x=>x!==id), channelId:E.channelId||prev.channelId||"", addedAt:prev.addedAt||now, updatedAt:now };
+    reactsTo:E.reactsTo.filter(x=>x!==id), extOrig:E.ext?.on?{note:(E.ext.note||"").trim(),url:(E.ext.url||"").trim()}:null, channelId:E.channelId||prev.channelId||"", addedAt:prev.addedAt||now, updatedAt:now };
   const newStubs=[...E.stubs.values()].filter(s=>E.reactsTo.includes(s.id)&&!S.videos.has(s.id));
   for(const s of newStubs) S.videos.set(s.id,{...s,updatedAt:now});
   S.videos.set(id,data); S.deleted.delete(id);
@@ -1434,20 +1768,6 @@ function removeVideo(id){
 }
 
 /* ================= Listen ================= */
-function openLists(){
-  $("#layer").innerHTML=`<div class="scrim"></div><div class="modal" data-modalbg><form class="sheet" id="lf">
-    <div class="sheet-head"><h2>Listen bearbeiten</h2><button type="button" class="btn ghost" data-close aria-label="Schließen">✕</button></div>
-    <div class="sheet-body"><p class="hint" style="margin:0">Ein Eintrag pro Zeile. Videos, die einen entfernten Wert tragen, behalten ihn.</p>
-      <div class="row">${[["genres","Genre"],["formats","Format"],["moods","Stimmung"]].map(([k,l])=>`<div class="f"><label for="l-${k}">${l}</label><textarea id="l-${k}" style="min-height:190px">${esc(S.lists[k].join("\n"))}</textarea></div>`).join("")}</div>
-      <p class="hint" style="margin:0">Die Verknüpfung mit Originalen erscheint bei Videos im Format „Reaction“.</p></div>
-    <div class="sheet-foot"><span></span><div class="actions"><button type="button" class="btn ghost" data-close>Abbrechen</button><button class="btn primary" type="submit">Speichern</button></div></div>
-  </form></div>`;
-  $("#lf").addEventListener("submit",e=>{ e.preventDefault();
-    const read=k=>[...new Set($("#l-"+k).value.split("\n").map(s=>s.trim()).filter(Boolean))];
-    S.lists={genres:read("genres"),formats:read("formats"),moods:read("moods")}; S.listsUpdatedAt=Date.now();
-    persist(); closeLayer(); render(); toast("Listen gespeichert"); });
-}
-
 /* ================= Einstellungen ================= */
 function openSettings(){
   const c=S.cfg;
@@ -1533,8 +1853,24 @@ let tt; function toast(m){ clearTimeout(tt); let el=$(".toast"); if(!el){el=docu
 
 /* ================= Ereignisse ================= */
 document.addEventListener("click",e=>{
-  const t=e.target.closest("button,a,label,[data-close],[data-modalbg]"); if(!t) return;
+  const t=e.target.closest("button,a,label,[data-close],[data-modalbg],[data-helpbg]"); if(!t) return;
   const d=t.dataset;
+  if(d.helpbg!==undefined){ if(e.target===t) closeHelp(); return; }
+  if(d.closehelp!==undefined){ closeHelp(); return; }
+  if(d.help){ e.preventDefault(); openHelp(d.help); return; }
+  if(d.helpgo){ helpGo(d.helpgo); return; }
+  if(d.helplists!==undefined){ closeHelp(); openLists(); return; }
+  if(d.letab){ LE.tab=d.letab; leTabs(); lePane(); return; }
+  if(d.lemv){ const a=LE.rows[LE.tab], i=+d.i, j=i+(+d.lemv); if(a[j]){ [a[i],a[j]]=[a[j],a[i]]; lePane(); } return; }
+  if(d.lerm!==undefined){ LE.rows[LE.tab].splice(+d.lerm,1); leTabs(); lePane(); return; }
+  if(d.leadd!==undefined){ LE.rows[LE.tab].push({orig:null,name:"",desc:""}); leTabs(); lePane(); const ins=document.querySelectorAll(".le-name"); ins[ins.length-1]?.focus(); return; }
+  if(d.lerec!==undefined){ lePreview(); return; }
+  if(d.lerecno!==undefined){ $("#le-rec").innerHTML=""; return; }
+  if(d.lerecgo!==undefined){ applyRecommended(); return; }
+  if(d.bulkedit!==undefined){ openBulkEdit(); return; }
+  if(d.bulk!==undefined){ const u=E&&!E.id?($("#e-url")?.value||"").trim():""; openBulk(u); return; }
+  if(d.rxf){ S.f.rx=d.rxf; render(); return; }
+  if(d.todo!==undefined){ S.f.todo=d.todo; render(); return; }
   if(d.modalbg!==undefined){ if(e.target===t) closeLayer(); return; }
   if(d.close!==undefined){ closeLayer(); render(); if(S.view==="feed"&&!F.fetchedAt&&S.cfg.ytKey) refreshFeed(); return; }
   if(d.feed){ openFeedDrawer(d.feed); return; }
@@ -1573,7 +1909,7 @@ document.addEventListener("click",e=>{
   if(d.loadpl!==undefined){ loadPlaylistInEditor(); return; }
   if(d.findorig!==undefined){ t.disabled=true; t.textContent="Suche …"; suggestOriginals(); return; }
   if(d.sugg){ pickSuggestion(d.sugg); return; }
-  if(d.asrx!==undefined){ const f=$("#e-format"); if(![...f.options].some(o=>o.value==="Reaction")) f.add(new Option("Reaction","Reaction")); f.value="Reaction"; t.remove(); renderRx(); $("#e-rx").scrollIntoView({block:"nearest"}); return; }
+  if(d.asrx!==undefined){ const f=$("#e-format"); let o=[...f.options].find(o=>isRxFormat(o.value)); if(!o){ o=new Option("Reaction","Reaction"); f.add(o); } f.value=o.value; selHint(f); t.remove(); renderRx(); $("#e-rx").scrollIntoView({block:"nearest"}); return; }
   if(d.clearkind!==undefined){ S.sf.kind.clear(); render(); return; }
   if(d.addseriesWith){ openSeriesEditor(null,{pick:[d.addseriesWith]}); return; }
   if(d.importpl){ openPlaylistImport(d.importpl); return; }
@@ -1589,7 +1925,7 @@ document.addEventListener("click",e=>{
   if(d.w){ S.f.watched=d.w; render(); return; }
   if(d.rm){ S.f[d.rm].delete(d.v); render(); return; }
   if(d.rmw!==undefined){ S.f.watched="all"; render(); return; }
-  if(d.clearall!==undefined){ for(const k of ["genre","format","creator","tags","mood","status","series"]) S.f[k].clear(); S.sf.kind.clear(); S.sf.progress="all"; S.f.watched="all"; S.q=""; $("#q").value=""; render(); return; }
+  if(d.clearall!==undefined){ clearVideoFilters(); S.sf.kind.clear(); S.sf.progress="all"; S.q=""; $("#q").value=""; render(); return; }
   if(d.tagfilter){ S.f.tags.add(d.tagfilter); closeLayer(); render(); return; }
   if(d.edit){ openEditor(d.edit); return; }
   if(d.toggleWatched!==undefined){ const v=S.videos.get(S.openId); updateVideo(v.id,{watched:!v.watched}); toast(v.watched?"Als ungesehen markiert":"Als gesehen markiert"); return; }
@@ -1617,12 +1953,13 @@ document.addEventListener("change",e=>{
   if(t.closest?.(".chbody")&&t.dataset.k&&(t.type==="checkbox"||t.tagName==="SELECT")) onChannelField(t);
   if(t.id==="feedHiddenToggle"){ F.showHidden=t.checked; render(); }
   if(t.id==="pi-series") piCount();
+  if(t.matches?.("select[data-lk]")) selHint(t);
   if(t.dataset.sw){ const v=S.videos.get(t.dataset.sw); if(v) updateVideo(v.id,{watched:t.checked}); }
   if(t.id==="addToSeries"&&t.value){ const vid=S.openId;
     if(t.value==="__new") openSeriesEditor(null,{pick:[vid]});
     else { const x=S.series.get(t.value); if(x&&!x.videoIds.includes(vid)) updateSeries(x.id,{videoIds:[...x.videoIds,vid]}); toast(`Zu „${x.name}“ hinzugefügt`); } }
 });
-$("#listsBtn").addEventListener("click",openLists);
+$("#listsBtn").addEventListener("click",()=>openLists());
 $("#settingsBtn").addEventListener("click",openSettings);
 $("#sync").addEventListener("click",()=>{ if(S.syncState==="err") (S.dirty?push():pull()); else openSettings(); });
 $("#filterToggle").addEventListener("click",()=>$("#rail").classList.toggle("open"));
@@ -1632,14 +1969,15 @@ $("#sort").addEventListener("change",e=>{ S.sort=e.target.value; lsSet("vt-sort"
 $("#rail").addEventListener("change",e=>{ if(e.target.id==="inclRx"){ S.f.inclRx=e.target.checked; lsSet("vt-inclrx",S.f.inclRx); render(); } });
 $("#rail").addEventListener("input",e=>{ if(e.target.id==="creatorQ"){ S.creatorQ=e.target.value; S._focusCreator=true; renderRail(); S._focusCreator=false; } });
 document.addEventListener("keydown",e=>{
-  if(e.key==="Escape"&&$("#layer").innerHTML) closeLayer();
+  if(e.key==="Escape"){ if($("#layer2").innerHTML) closeHelp(); else if($("#layer").innerHTML) closeLayer(); }
   if(e.key==="/"&&!/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)&&!$("#layer").innerHTML){ e.preventDefault(); $("#q").focus(); } });
 document.addEventListener("paste",e=>{ // YouTube-URL irgendwo einfügen → direkt neues Video
   if(/INPUT|TEXTAREA/.test(document.activeElement.tagName)||$("#layer").innerHTML) return;
   const txt=(e.clipboardData?.getData("text")||"").trim(); if(!/youtu/.test(txt)) return;
-  const pl=parsePlaylistId(txt);
-  if(pl&&!parseId(txt)){ e.preventDefault(); openPlaylistImport(txt); }
-  else if(parseId(txt)){ e.preventDefault(); openEditor(null,txt); } });
+  const items=parseBulk(txt).filter(x=>!x.bad);
+  if(items.length>1||(items.length===1&&items[0].p)){ e.preventDefault(); openBulk(txt); }
+  else if(items.length===1){ e.preventDefault(); openEditor(null,txt); } });
+new MutationObserver(()=>document.body.classList.toggle("has-drawer",!!$("#layer .drawer"))).observe($("#layer"),{childList:true});
 document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible"&&GH.ready()&&!pushing&&!S.dirty) pull({quiet:true}); });
 window.addEventListener("beforeunload",e=>{ if(S.dirty&&GH.ready()){ push(); e.preventDefault(); e.returnValue=""; } });
 // Link mit ?add=URL (z. B. per Lesezeichen) öffnet direkt das Formular

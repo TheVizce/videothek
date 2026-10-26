@@ -83,4 +83,12 @@ Neue Abos später einfach einzeln hinzufügen (Kanal-URL, @Handle oder ein Video
 - **Export/Import** als JSON für zusätzliche Backups. Jede Änderung ist außerdem ein Commit im Daten-Repo und lässt sich dort zurückverfolgen.
 
 ## Sicherheit
-Token und API-Schlüssel werden nur im `localStorage` deines Browsers gespeichert und nur an GitHub bzw. Google gesendet. Trag sie nicht auf fremden oder geteilten Geräten ein. Das Token kann nur das Daten-Repo lesen und schreiben, sonst nichts.
+Token und API-Schlüssel werden nur in deinem Browser (IndexedDB „videothek-tool“) gespeichert und nur an GitHub bzw. Google gesendet. Trag sie nicht auf fremden oder geteilten Geräten ein. Das Token kann nur das Daten-Repo lesen und schreiben, sonst nichts.
+
+## Speicher im Browser
+- **IndexedDB `videothek-tool`** (ein Objektspeicher `kv`): `library` (lokale Kopie der Bibliothek und noch nicht synchronisierte Änderungen), `feed` (Zwischenspeicher der Abos), `config` (Repo, Token, API-Schlüssel). IndexedDB hat ein eigenes, viel größeres Kontingent und belastet die anderen Tools auf derselben Domain nicht.
+- **localStorage** nur für kleine UI-Einstellungen, alle mit Präfix `videothek:` (`view`, `sort`, `inclrx`, `feedseen`, zusammen unter 1 KB). Das Tool ruft nie `localStorage.clear()` auf und fasst keine fremden Schlüssel an.
+- Beim ersten Start übernimmt die Videothek die alten Einträge `vt-cache`, `vt-config` und `vt-feed` in die Datenbank, prüft sie und entfernt sie erst dann aus dem localStorage. Die alten UI-Schlüssel `vt-*` ziehen nach `videothek:*` um.
+- Scheitert das Speichern (z. B. Speicher voll), erscheint oben ein roter Hinweis mit „Jetzt exportieren“ und „Erneut speichern“.
+- Die Videothek bittet den Browser um **dauerhaften Speicher**. Ob er gewährt wurde und wie viel belegt ist, steht unter Einstellungen → Bibliothek pflegen.
+- **Backup:** Einstellungen → „Als JSON exportieren“ / „JSON importieren“ (Token und Schlüssel sind bewusst nicht enthalten). Mit GitHub-Verbindung ist zusätzlich jede Änderung ein Commit im Daten-Repo.

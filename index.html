@@ -111,6 +111,7 @@ button.chip:hover{border-color:var(--muted)}
 .empty{border:1.5px dashed var(--line);border-radius:10px;padding:48px 24px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px;color:var(--muted)}
 .empty h2{font-family:var(--f-display);color:var(--ink);font-size:22px;margin:0;text-wrap:balance}
 .empty p{max-width:46ch;margin:0}
+.notice.err{border:1.5px solid var(--warn)}
 .notice{background:var(--accent-soft);border-radius:var(--r);padding:10px 14px;margin-bottom:16px;font-size:13px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:space-between}
 
 .scrim{position:fixed;inset:0;background:rgba(10,12,16,.45);z-index:20}
@@ -406,11 +407,97 @@ function fmtGuideText(t){
 
 const DEFAULT_LISTS={genres:[...RECOMMENDED.genres],formats:[...RECOMMENDED.formats],moods:[...RECOMMENDED.moods],moodLabel:RECOMMENDED.moodLabel,desc:structuredClone(RECOMMENDED.desc)};
 
-const LS_CFG="vt-config", LS_CACHE="vt-cache";
+
 
 /* ================= Speicher: GitHub + lokaler Cache ================= */
-const lsGet=(k,d)=>{ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):d; }catch(e){ return d; } };
-const lsSet=(k,v)=>{ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} };
+// Nur für kleine UI-Einstellungen; Schlüssel bekommen automatisch das Präfix „videothek:“
+const lsGet=(k,d)=>{ try{ const v=localStorage.getItem("videothek:"+k); return v?JSON.parse(v):d; }catch(e){ return d; } };
+const lsSet=(k,v)=>{ try{ localStorage.setItem("videothek:"+k,JSON.stringify(v)); }catch(e){ console.warn("Videothek: UI-Einstellung nicht gespeichert",k,e); } };
+/* ================= Speicher im Browser: IndexedDB ================= */
+// Daten (Bibliothek, Abo-Feed, Zugangsdaten) liegen in der IndexedDB „videothek-tool“.
+// Nur kleine UI-Einstellungen bleiben im localStorage, alle mit dem Präfix „videothek:“.
+const DB_NAME="videothek-tool", DB_STORE="kv", UI="videothek:";
+const OLD_KEYS={library:"vt-cache",config:"vt-config",feed:"vt-feed"};
+const OLD_UI={"vt-view":"view","vt-sort":"sort","vt-inclrx":"inclrx","vt-feedseen":"feedseen"};
+const Store={
+  db:null, mode:"idb", ready:false, initErr:null,
+  async init(){
+    try{
+      if(!("indexedDB" in window)) throw new Error("IndexedDB wird von diesem Browser nicht unterstützt.");
+      this.db=await new Promise((res,rej)=>{
+        const r=indexedDB.open(DB_NAME,1);
+        r.onupgradeneeded=()=>{ if(!r.result.objectStoreNames.contains(DB_STORE)) r.result.createObjectStore(DB_STORE); };
+        r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); r.onblocked=()=>rej(new Error("Die Datenbank ist in einem anderen Tab blockiert. Schließe andere Tabs der Videothek."));
+      });
+      this.db.onversionchange=()=>{ this.db.close(); };
+    }catch(e){ this.mode="ls"; this.initErr=e; }
+    this.ready=true;
+  },
+  tx(mode){ return this.db.transaction(DB_STORE,mode).objectStore(DB_STORE); },
+  get(k){
+    if(this.mode==="ls"){ try{ const v=localStorage.getItem(UI+"data:"+k); return Promise.resolve(v?JSON.parse(v):undefined); }catch(e){ return Promise.reject(e); } }
+    return new Promise((res,rej)=>{ const r=this.tx("readonly").get(k); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); });
+  },
+  set(k,v){
+    if(this.mode==="ls"){ try{ localStorage.setItem(UI+"data:"+k,JSON.stringify(v)); return Promise.resolve(); }catch(e){ return Promise.reject(e); } }
+    return new Promise((res,rej)=>{ const t=this.db.transaction(DB_STORE,"readwrite"); t.objectStore(DB_STORE).put(v,k);
+      t.oncomplete=()=>res(); t.onerror=()=>rej(t.error); t.onabort=()=>rej(t.error||new Error("Speichern abgebrochen")); });
+  }
+};
+const isQuota=e=>!!e&&(e.name==="QuotaExceededError"||e.name==="NS_ERROR_DOM_QUOTA_REACHED"||/quota/i.test(e.message||""));
+function storeFail(e,what="Bibliothek"){
+  console.error("Videothek: Speichern fehlgeschlagen",e);
+  const base=isQuota(e)?`Der Speicher im Browser ist voll, ${what} konnte nicht gesichert werden.`:`${what} konnte im Browser nicht gespeichert werden (${e?.name||"Fehler"}: ${e?.message||e}).`;
+  S.storeErr=base+(GH.ready()?" Deine Änderungen werden weiter auf GitHub gespeichert, solange die Verbindung steht.":" Exportiere deine Daten jetzt als JSON, damit nichts verloren geht.");
+  showNotice(); toast("Speichern im Browser fehlgeschlagen");
+}
+function mergeCaches(a,b){ // zwei lokale Stände zusammenführen: je Eintrag gewinnt der neuere, nichts geht verloren
+  const byId=(x,y)=>{ const m=new Map(); for(const it of [...(x||[]),...(y||[])]){ if(!it?.id) continue; const c=m.get(it.id); if(!c||(it.updatedAt||0)>=(c.updatedAt||0)) m.set(it.id,it); } return [...m.values()]; };
+  const A=a.data, B=b.data, newer=(B.updatedAt||0)>(A.updatedAt||0)?b:a;
+  const lists=(B.listsUpdatedAt||0)>(A.listsUpdatedAt||0)?B:A;
+  return {...newer, dirty:!!(a.dirty||b.dirty), data:{...newer.data, videos:byId(A.videos,B.videos), series:byId(A.series,B.series), channels:byId(A.channels,B.channels),
+    feedHidden:{...(A.feedHidden||{}),...(B.feedHidden||{})}, lists:lists.lists, listsUpdatedAt:lists.listsUpdatedAt||0}};
+}
+async function migrateFromLocalStorage(){
+  // UI-Einstellungen auf eindeutige Schlüssel umziehen
+  for(const [o,n] of Object.entries(OLD_UI)){ try{ const v=localStorage.getItem(o); if(v===null) continue; if(localStorage.getItem(UI+n)===null) localStorage.setItem(UI+n,v); localStorage.removeItem(o); }catch(e){} }
+  if(Store.mode!=="idb") return {moved:[]};
+  const moved=[];
+  for(const [key,old] of Object.entries(OLD_KEYS)){
+    let raw=null; try{ raw=localStorage.getItem(old); }catch(e){ continue; }
+    if(raw===null) continue;
+    let val; try{ val=JSON.parse(raw); }catch(e){ console.warn("Videothek: alter Eintrag nicht lesbar, bleibt erhalten:",old); continue; }
+    const cur=await Store.get(key);
+    // Gibt es schon Daten in der Datenbank, gewinnt der neuere Stand (z. B. wenn ein alter Tab weitergeschrieben hat)
+    const both=key==="library"&&cur?.data&&val?.data;
+    if(cur===undefined||both){
+      if(both) val=mergeCaches(cur,val);
+      await Store.set(key,val);
+      const back=await Store.get(key);
+      if(back===undefined) throw new Error(`Übernahme von „${old}“ ließ sich nicht prüfen. Der alte Eintrag bleibt erhalten.`);
+    }
+    try{ localStorage.removeItem(old); }catch(e){}
+    moved.push(old);
+  }
+  return {moved};
+}
+async function requestPersist(){
+  try{ if(navigator.storage?.persisted&&!(await navigator.storage.persisted())&&navigator.storage.persist) S.persisted=await navigator.storage.persist(); else S.persisted=await navigator.storage?.persisted?.(); }catch(e){ S.persisted=undefined; }
+}
+async function storageInfoHTML(){
+  let est=null; try{ est=await navigator.storage?.estimate?.(); }catch(e){}
+  let persisted; try{ persisted=await navigator.storage?.persisted?.(); }catch(e){}
+  const mb=b=>(b/1048576).toFixed(b<1048576?2:1).replace(".",",")+" MB";
+  return [Store.mode==="idb"?`Gespeichert in der Browser-Datenbank „${DB_NAME}“.`:`IndexedDB ist nicht verfügbar (${esc(Store.initErr?.message||"")}). Die Daten liegen ersatzweise im begrenzten localStorage.`,
+    est?.usage!=null?`Belegt: ${mb(est.usage)}${est.quota?` von verfügbar ${mb(est.quota)}`:""}.`:"",
+    persisted===true?"Dauerhafter Speicher ist gewährt: Der Browser löscht die Daten nicht automatisch.":persisted===false?"Dauerhafter Speicher wurde nicht gewährt: Bei Platzmangel könnte der Browser die lokalen Daten löschen. Halte deshalb GitHub verbunden oder exportiere regelmäßig.":""].filter(Boolean).join(" ");
+}
+function exportJSON(){
+  const blob=new Blob([JSON.stringify(snapshotData(),null,1)],{type:"application/json"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=`videothek-${new Date().toISOString().slice(0,10)}.json`;
+  document.body.append(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+}
+
 
 function b64ToUtf8(b64){ const bin=atob(b64.replace(/\s/g,"")); const bytes=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i); return new TextDecoder().decode(bytes); }
 function utf8ToB64(str){ const bytes=new TextEncoder().encode(str); let bin=""; for(let i=0;i<bytes.length;i+=0x8000) bin+=String.fromCharCode.apply(null,bytes.subarray(i,i+0x8000)); return btoa(bin); }
@@ -480,7 +567,15 @@ function mergeRemote(d){
   for(const [k,t] of Object.entries(d?.feedHidden||{})) if(!(k in S.feedHidden)&&!S.unhidden.has(k)) S.feedHidden[k]=t;
   if(d?.lists&&(d.listsUpdatedAt||0)>(S.listsUpdatedAt||0)){ S.lists=d.lists; S.listsUpdatedAt=d.listsUpdatedAt; }
 }
-function cacheLocal(){ lsSet(LS_CACHE,{data:snapshotData(),sha:S.sha,dirty:S.dirty,deleted:[...S.deleted],deletedSeries:[...S.deletedSeries],deletedChannels:[...S.deletedChannels],unhidden:[...S.unhidden],repoKey:repoKey()}); }
+let cacheTimer=null;
+function cacheLocal(){ clearTimeout(cacheTimer); cacheTimer=setTimeout(flushCache,250); }
+async function flushCache(){
+  clearTimeout(cacheTimer); cacheTimer=null;
+  if(!S.storeLoaded) return; // nie einen leeren Startzustand über echte Daten schreiben
+  try{ await Store.set("library",{data:snapshotData(),sha:S.sha,dirty:S.dirty,deleted:[...S.deleted],deletedSeries:[...S.deletedSeries],deletedChannels:[...S.deletedChannels],unhidden:[...S.unhidden],repoKey:repoKey()});
+    if(S.storeErr){ S.storeErr=""; showNotice(); } }
+  catch(e){ storeFail(e); }
+}
 const repoKey=()=>`${S.cfg.owner}/${S.cfg.repo}@${S.cfg.branch}:${S.cfg.path}`;
 
 let pushTimer=null, pushing=false;
@@ -522,18 +617,19 @@ function setSync(){
 }
 function showNotice(){
   const n=$("#notice");
-  if(!GH.ready()) n.innerHTML=`<div class="notice"><span>Die Bibliothek ist noch nicht mit GitHub verbunden und wird nur in diesem Browser gespeichert.</span><button class="btn" data-settings>GitHub verbinden</button></div>`;
+  if(S.storeErr) n.innerHTML=`<div class="notice err"><span>${esc(S.storeErr)}</span><span class="actions"><button class="btn" data-export>Jetzt exportieren</button><button class="btn ghost" data-storeretry>Erneut speichern</button></span></div>`;
+  else if(!GH.ready()) n.innerHTML=`<div class="notice"><span>Die Bibliothek ist noch nicht mit GitHub verbunden und wird nur in diesem Browser gespeichert.</span><button class="btn" data-settings>GitHub verbinden</button></div>`;
   else if(S.syncState==="err") n.innerHTML=`<div class="notice"><span>${esc(S.syncErr)}</span><span class="actions"><button class="btn" data-retry>Erneut versuchen</button><button class="btn ghost" data-settings>Einstellungen</button></span></div>`;
   else n.innerHTML="";
 }
 
 /* ================= Zustand & Helfer ================= */
 const S = {
-  videos:new Map(), series:new Map(), deletedSeries:new Set(), channels:new Map(), deletedChannels:new Set(), feedHidden:{}, unhidden:new Set(), view:lsGet("vt-view","videos"), lists:structuredClone(DEFAULT_LISTS), listsUpdatedAt:0, loaded:false,
-  cfg:Object.assign({owner:"",repo:"",branch:"main",path:"library.json",token:"",ytKey:""},lsGet(LS_CFG,{})),
+  videos:new Map(), series:new Map(), deletedSeries:new Set(), channels:new Map(), deletedChannels:new Set(), feedHidden:{}, unhidden:new Set(), view:lsGet("view","videos"), lists:structuredClone(DEFAULT_LISTS), listsUpdatedAt:0, loaded:false,
+  cfg:{owner:"",repo:"",branch:"main",path:"library.json",token:"",ytKey:""}, storeLoaded:false, storeErr:"",
   sha:null, dirty:false, deleted:new Set(), syncState:"", syncErr:"",
-  f:{genre:new Set(),format:new Set(),mood:new Set(),creator:new Set(),tags:new Set(),status:new Set(),series:new Set(),watched:"all",rx:"all",todo:"",inclRx:lsGet("vt-inclrx",false)},
-  sf:{kind:new Set(),progress:"all"}, openSeries:null, q:"", sort:lsGet("vt-sort","added"), creatorQ:"", openId:null, playing:false
+  f:{genre:new Set(),format:new Set(),mood:new Set(),creator:new Set(),tags:new Set(),status:new Set(),series:new Set(),watched:"all",rx:"all",todo:"",inclRx:lsGet("inclrx",false)},
+  sf:{kind:new Set(),progress:"all"}, openSeries:null, q:"", sort:lsGet("sort","added"), creatorQ:"", openId:null, playing:false
 };
 const $ = s=>document.querySelector(s);
 const esc = s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -1021,17 +1117,16 @@ function saveSeries(){
   S.series.set(id,{...(prev||{}),id,name,kind:$("#se-kind").value,description:$("#se-desc").value.trim(),playlistId:pid||"",
     videoIds:[...order,...add],defaults:def,addedAt:prev?.addedAt||now,updatedAt:now});
   S.deletedSeries.delete(id);
-  persist(); S.view="series"; lsSet("vt-view","series"); closeLayer(); render(); openSeriesDrawer(id);
+  persist(); S.view="series"; lsSet("view","series"); closeLayer(); render(); openSeriesDrawer(id);
   toast(add.length?`${add.length} ${add.length===1?"Video":"Videos"} hinzugefügt`:(ES.isNew?"Reihe angelegt":"Gespeichert"));
   if(needMeta.length) enrichStubs(needMeta);
 }
 
 /* ================= Abos ================= */
-const LS_FEED="vt-feed", LS_FEEDSEEN="vt-feedseen";
+const LS_FEEDSEEN="feedseen";
 const F={ items:[], fetchedAt:0, loading:false, progress:"", errors:[], seenPrev:lsGet(LS_FEEDSEEN,0),
   show:"all", ch:new Set(), showHidden:false, chQ:"" };
-(()=>{ const c=lsGet(LS_FEED,null); if(c){ F.items=c.items||[]; F.fetchedAt=c.fetchedAt||0; } })();
-function saveFeedCache(){ lsSet(LS_FEED,{fetchedAt:F.fetchedAt,items:F.items}); }
+function saveFeedCache(){ Store.set("feed",{fetchedAt:F.fetchedAt,items:F.items}).catch(e=>storeFail(e,"Der Abo-Feed")); }
 const splitWords=t=>(t||"").split(",").map(x=>x.trim().toLowerCase()).filter(Boolean);
 function chRuleSummary(c){ const p=[]; const inc=splitWords(c.include), exc=splitWords(c.exclude);
   if(inc.length) p.push("nur: "+inc.join(", ")); if(exc.length) p.push("ohne: "+exc.join(", ")); if(c.hideShorts) p.push("keine Shorts"); return p.join(" · "); }
@@ -1386,8 +1481,8 @@ function piImport(){
     S.series.set(sid,{id:sid,name:sname,kind:pl.pid?"Playlist":"Serie",description:(pl.description||"").slice(0,1500),playlistId:pl.pid||"",
       videoIds:pl.ids.filter(id=>S.videos.has(id)),defaults:def,addedAt:now,updatedAt:now}); }
   persist(); closeLayer();
-  if(sid){ S.view="series"; lsSet("vt-view","series"); render(); openSeriesDrawer(sid); }
-  else { S.view="videos"; lsSet("vt-view","videos"); S.sort="added"; $("#sort").value="added"; lsSet("vt-sort","added"); render(); }
+  if(sid){ S.view="series"; lsSet("view","series"); render(); openSeriesDrawer(sid); }
+  else { S.view="videos"; lsSet("view","videos"); S.sort="added"; $("#sort").value="added"; lsSet("sort","added"); render(); }
   toast(ids.length?`${plur(ids.length,"Video","Videos")} hinzugefügt`:"Reihe angelegt");
   if(needMeta.length) enrichStubs(needMeta);
 }
@@ -1486,7 +1581,7 @@ function applyRecommended(){
   S.lists=structuredClone({genres:RECOMMENDED.genres,formats:RECOMMENDED.formats,moods:RECOMMENDED.moods,moodLabel:RECOMMENDED.moodLabel,desc:RECOMMENDED.desc});
   S.listsUpdatedAt=Date.now(); persist(); closeLayer();
   const old=oldValues(); const nOld=[...S.videos.values()].filter(v=>LIST_KEYS.some(([lk,f])=>isOldVal(lk,v[f]))).length;
-  if(nOld){ S.view="videos"; lsSet("vt-view","videos"); clearVideoFilters(); S.f.todo="old"; }
+  if(nOld){ S.view="videos"; lsSet("view","videos"); clearVideoFilters(); S.f.todo="old"; }
   render(); toast(`Einteilung übernommen${n?`, ${plur(n,"Video","Videos")} umbenannt`:""}${nOld?`. ${nOld} mit alten Werten werden angezeigt`:""}`);
 }
 function clearVideoFilters(){ for(const k of ["genre","format","creator","tags","mood","status","series"]) S.f[k].clear(); S.f.watched="all"; S.f.rx="all"; S.f.todo=""; }
@@ -1792,6 +1887,7 @@ function openSettings(){
         <span class="hint">Damit holt die Videothek auch Upload-Datum und Dauer. Ohne Schlüssel nur Titel und Creator.</span></div>
       <hr class="sep">
       <h3>Bibliothek pflegen</h3>
+      <p class="hint" id="s-storage" style="margin:0">Speicher wird geprüft …</p>
       <div class="actions">
         <button type="button" class="btn" id="s-check">Fehlende Daten & Verfügbarkeit prüfen</button>
         <button type="button" class="btn" id="s-export">Als JSON exportieren</button>
@@ -1805,7 +1901,7 @@ function openSettings(){
     const old=repoKey();
     S.cfg={owner:$("#s-owner").value.trim(),repo:$("#s-repo").value.trim(),branch:$("#s-branch").value.trim()||"main",
       path:$("#s-path").value.trim().replace(/^\/+/,"")||"library.json",token:$("#s-token").value.trim(),ytKey:$("#s-yt").value.trim()};
-    lsSet(LS_CFG,S.cfg);
+    try{ await Store.set("config",S.cfg); }catch(e){ $("#s-err").textContent=(isQuota(e)?"Der Browser-Speicher ist voll. ":"")+"Einstellungen konnten nicht gespeichert werden: "+(e?.message||e); storeFail(e,"Die Einstellungen"); return; }
     const any=S.cfg.owner||S.cfg.repo||S.cfg.token;
     if(any&&!GH.ready()){ $("#s-err").textContent="Für GitHub brauchst du Besitzer, Repo und Token."; return; }
     if(GH.ready()){
@@ -1817,11 +1913,8 @@ function openSettings(){
     }
     setSync(); showNotice(); closeLayer(); render(); toast(GH.ready()?"Mit GitHub verbunden":"Einstellungen gespeichert");
   });
-  $("#s-export").addEventListener("click",()=>{
-    const blob=new Blob([JSON.stringify(snapshotData(),null,1)],{type:"application/json"});
-    const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=`videothek-${new Date().toISOString().slice(0,10)}.json`; a.click();
-    setTimeout(()=>URL.revokeObjectURL(a.href),2000);
-  });
+  $("#s-export").addEventListener("click",exportJSON);
+  storageInfoHTML().then(h=>{ const el=$("#s-storage"); if(el) el.textContent=h; });
   $("#s-import").addEventListener("change",async e=>{
     const file=e.target.files[0]; if(!file) return; const msg=$("#s-msg");
     try{ const d=JSON.parse(await file.text()); if(!Array.isArray(d.videos)) throw 0;
@@ -1896,7 +1989,7 @@ document.addEventListener("click",e=>{
   if(d.sf){ const st=S.sf.kind; st.has(d.v)?st.delete(d.v):st.add(d.v); render(); return; }
   if(d.sp){ S.sf.progress=d.sp; render(); return; }
   if(d.continue){ openDrawer(d.continue,true); return; }
-  if(d.showvideos){ S.view="videos"; lsSet("vt-view",S.view); for(const k of ["genre","format","creator","tags","mood","status","series"]) S.f[k].clear(); S.f.series.add(d.showvideos); closeLayer(); render(); return; }
+  if(d.showvideos){ S.view="videos"; lsSet("view",S.view); for(const k of ["genre","format","creator","tags","mood","status","series"]) S.f[k].clear(); S.f.series.add(d.showvideos); closeLayer(); render(); return; }
   if(d.mv){ moveInSeries(S.openSeries,d.id,+d.mv); return; }
   if(d.rmpart){ const x=S.series.get(S.openSeries); updateSeries(x.id,{videoIds:x.videoIds.filter(i=>i!==d.rmpart)}); toast("Aus der Reihe entfernt"); return; }
   if(d.allwatched!==undefined){ const x=S.series.get(S.openSeries); const all=x.videoIds.every(id=>S.videos.get(id)?.watched); for(const id of x.videoIds){ const v=S.videos.get(id); if(v&&v.watched===all) S.videos.set(id,{...v,watched:!all,updatedAt:Date.now()}); } persist(); render(); return; }
@@ -1918,6 +2011,8 @@ document.addEventListener("click",e=>{
   if(d.pisel){ PI.sel=new Set(d.pisel==="all"?PI.pl.ids.filter(id=>!S.videos.has(id)):[]); piList(); piCount(); return; }
   if(d.settings!==undefined){ openSettings(); return; }
   if(d.retry!==undefined){ S.dirty?push():pull(); return; }
+  if(d.export!==undefined){ exportJSON(); return; }
+  if(d.storeretry!==undefined){ flushCache(); return; }
   if(d.open){ openDrawer(d.open); return; }
   if(d.play!==undefined){ S.playing=true; $(".player").innerHTML=""; renderDrawer(); return; }
   if(d.f){ const s=S.f[d.f]; s.has(d.v)?s.delete(d.v):s.add(d.v); render(); return; }
@@ -1942,10 +2037,11 @@ $("#addBtn").addEventListener("click",()=>S.view==="series"?openSeriesEditor():S
 function setView(v){
   if(S.view==="feed"&&v!=="feed") lsSet(LS_FEEDSEEN,Date.now());
   if(v==="feed"&&S.view!=="feed") F.seenPrev=lsGet(LS_FEEDSEEN,0);
-  S.view=v; lsSet("vt-view",v); closeLayer(); render();
+  S.view=v; lsSet("view",v); closeLayer(); render();
   if(v==="feed"&&S.cfg.ytKey&&S.channels.size&&Date.now()-F.fetchedAt>30*6e4) refreshFeed();
 }
-document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="hidden"&&S.view==="feed") lsSet(LS_FEEDSEEN,Date.now()); });
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="hidden"){ if(cacheTimer) flushCache(); if(S.view==="feed") lsSet(LS_FEEDSEEN,Date.now()); } });
+window.addEventListener("pagehide",()=>{ if(cacheTimer) flushCache(); });
 document.addEventListener("input",e=>{ if(e.target.closest?.(".chbody")&&e.target.dataset.k&&e.target.type!=="checkbox"&&e.target.tagName!=="SELECT") onChannelField(e.target);
   if(e.target.id==="chQ"){ F.chQ=e.target.value; F._focus=true; renderFeedRail(); F._focus=false; } });
 document.addEventListener("change",e=>{
@@ -1965,8 +2061,8 @@ $("#sync").addEventListener("click",()=>{ if(S.syncState==="err") (S.dirty?push(
 $("#filterToggle").addEventListener("click",()=>$("#rail").classList.toggle("open"));
 $("#q").addEventListener("input",e=>{ S.q=e.target.value.trim(); if(S.view==="series"){ renderSeriesActive(); renderSeriesGrid(); } else if(S.view==="feed"){ renderFeedActive(); renderFeedGrid(); } else { renderActive(); renderGrid(); } });
 $("#sort").value=S.sort;
-$("#sort").addEventListener("change",e=>{ S.sort=e.target.value; lsSet("vt-sort",S.sort); renderGrid(); });
-$("#rail").addEventListener("change",e=>{ if(e.target.id==="inclRx"){ S.f.inclRx=e.target.checked; lsSet("vt-inclrx",S.f.inclRx); render(); } });
+$("#sort").addEventListener("change",e=>{ S.sort=e.target.value; lsSet("sort",S.sort); renderGrid(); });
+$("#rail").addEventListener("change",e=>{ if(e.target.id==="inclRx"){ S.f.inclRx=e.target.checked; lsSet("inclrx",S.f.inclRx); render(); } });
 $("#rail").addEventListener("input",e=>{ if(e.target.id==="creatorQ"){ S.creatorQ=e.target.value; S._focusCreator=true; renderRail(); S._focusCreator=false; } });
 document.addEventListener("keydown",e=>{
   if(e.key==="Escape"){ if($("#layer2").innerHTML) closeHelp(); else if($("#layer").innerHTML) closeLayer(); }
@@ -1984,14 +2080,25 @@ window.addEventListener("beforeunload",e=>{ if(S.dirty&&GH.ready()){ push(); e.p
 const addParam=new URLSearchParams(location.search).get("add");
 
 /* ================= Start ================= */
-(function start(){
-  const cache=lsGet(LS_CACHE,null);
+(async function start(){
+  render();
+  await Store.init();
+  try{ const m=await migrateFromLocalStorage(); if(m.moved.length) console.info("Videothek: aus localStorage übernommen:",m.moved.join(", ")); }
+  catch(e){ storeFail(e,"Die Übernahme der alten Daten"); }
+  S.view=lsGet("view","videos"); S.sort=lsGet("sort","added"); $("#sort").value=S.sort; S.f.inclRx=lsGet("inclrx",false); F.seenPrev=lsGet(LS_FEEDSEEN,0);
+  let cache=null;
+  try{ Object.assign(S.cfg,(await Store.get("config"))||{}); cache=(await Store.get("library"))||null;
+    const fc=await Store.get("feed"); if(fc){ F.items=fc.items||[]; F.fetchedAt=fc.fetchedAt||0; } }
+  catch(e){ storeFail(e,"Das Laden aus dem Browser-Speicher"); }
+  if(Store.mode!=="idb"&&!S.storeErr){ S.storeErr=`IndexedDB ist in diesem Browser nicht verfügbar (${Store.initErr?.message||"unbekannt"}). Die Daten liegen ersatzweise im begrenzten localStorage.`; }
   if(cache&&cache.data&&(!GH.ready()||cache.repoKey===repoKey()||!cache.repoKey)){
     applyData(cache.data); S.sha=cache.sha||null; S.dirty=!!cache.dirty; S.deleted=new Set(cache.deleted||[]); S.deletedSeries=new Set(cache.deletedSeries||[]); S.deletedChannels=new Set(cache.deletedChannels||[]); S.unhidden=new Set(cache.unhidden||[]);
     S.loaded=true;
   }
   if(!GH.ready()) S.loaded=true;
+  S.storeLoaded=true;
   setSync(); showNotice(); render();
+  requestPersist();
   const feedAuto=()=>{ if(S.view==="feed"&&S.cfg.ytKey&&S.channels.size&&Date.now()-F.fetchedAt>30*6e4) refreshFeed(); };
   if(GH.ready()) pull({quiet:!!cache}).then(()=>{ if(S.dirty) push(); feedAuto(); }); else feedAuto();
   if(addParam&&parseId(addParam)){ history.replaceState(null,"",location.pathname); openEditor(null,addParam); }

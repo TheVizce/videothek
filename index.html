@@ -229,6 +229,11 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:4px 0}
 .pirow b{display:block;font-weight:600;font-size:13px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .pirow small{color:var(--muted)}
 .pirow .num{font-size:12px;color:var(--muted);text-align:right}
+.cbbar{display:flex;gap:10px 14px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
+.cblist{max-height:min(52vh,560px)}
+.cblist .pirow{grid-template-columns:auto 56px 96px minmax(0,1fr)}
+.cbdur{display:none}
+@media (max-width:600px){.cblist .pirow{grid-template-columns:auto 72px minmax(0,1fr)}.cblist .pirow .num{display:none}.cbdur{display:inline}}
 .optrow{display:flex;align-items:center;gap:2px}
 .optrow .opt{flex:1;min-width:0}
 .star{border:0;background:none;padding:3px 6px;border-radius:4px;color:var(--muted);font-size:15px;line-height:1}
@@ -840,7 +845,7 @@ function renderDrawer(){
 }
 function drawerRest(v,originals,reacts,row){
   return `<div><h3 class="dtitle">${esc(titleOf(v))}</h3><div class="hint" style="margin-top:4px">${esc(v.creator||"Creator unbekannt")}</div>
-        ${v.channelId?(S.channels.has(v.channelId)?`<button class="btn ghost follow" style="padding:2px 6px;font-size:12px" data-chrules="${v.channelId}">✓ In deinen Abos · Regeln</button>`:`<button class="btn follow" style="padding:4px 10px;font-size:12px" data-chfollow="${v.channelId}">+ Kanal in Abos aufnehmen</button>`):""}</div>
+        ${v.channelId?(S.channels.has(v.channelId)?`<button class="btn ghost follow" style="padding:2px 6px;font-size:12px" data-chrules="${v.channelId}">✓ In deinen Abos · Regeln</button>`:`<button class="btn follow" style="padding:4px 10px;font-size:12px" data-chfollow="${v.channelId}">+ Kanal in Abos aufnehmen</button>`)+` <button class="btn ghost follow" style="padding:2px 6px;font-size:12px" data-cbrowse="${v.channelId}">Weitere Videos des Kanals</button>`:""}</div>
       <div class="actions">
         <a class="btn primary" href="${ytUrl(v.id)}" target="_blank" rel="noopener">Auf YouTube öffnen ↗</a>
         <button class="btn" data-toggle-watched>${v.watched?"Als ungesehen markieren":"Als gesehen markieren"}</button>
@@ -1271,6 +1276,7 @@ function renderFeedDrawer(){
     <div class="actions">${inLib?`<button class="btn primary" data-open="${it.id}">In der Videothek öffnen</button>`:`<button class="btn primary" data-fadd="${it.id}">+ Videothek (ungesehen)</button><button class="btn" data-faddedit="${it.id}">Übernehmen & bearbeiten</button>`}
       <button class="btn ghost" data-fhide="${it.id}">${S.feedHidden[it.id]?"Wieder einblenden":"Ausblenden"}</button>
       <a class="btn ghost" href="${ytUrl(it.id)}" target="_blank" rel="noopener">YouTube ↗</a>
+      <button class="btn ghost" data-cbrowse="${it.channelId}">Alle Videos des Kanals</button>
       ${c?`<button class="btn ghost" data-fav="${c.id}">${c.fav?"★ Favorit":"☆ Kanal als Favorit"}</button>`:""}</div>
     ${it.desc?`<p class="desc">${esc(it.desc)}${it.desc.length>=400?" …":""}</p>`:""}
     ${c&&(c.genre||(c.tags||[]).length)?`<p class="hint" style="margin:0">Beim Übernehmen bekommt das Video${c.genre?` das Genre „${esc(c.genre)}“`:""}${c.genre&&(c.tags||[]).length?" und":""}${(c.tags||[]).length?` die Tags ${esc(c.tags.join(", "))}`:""} (Einstellung des Kanals).</p>`:""}`;
@@ -1290,9 +1296,9 @@ async function resolveChannel(input){
   if(!q){ const vid=parseId(s); if(vid){ const m=(await fetchMeta([vid])).get(vid); if(m?.channelId) q="id="+m.channelId; } }
   if(!q&&/^[\w.\-]{3,}$/.test(s)) q="forHandle="+encodeURIComponent("@"+s);
   if(!q) throw {msg:"Das erkenne ich nicht. Füge die Kanal-URL ein (z. B. youtube.com/@NHL), das @Handle oder die URL eines Videos des Kanals."};
-  const j=await ytJson(`https://www.googleapis.com/youtube/v3/channels?part=snippet&${q}&key=${key}`);
+  const j=await ytJson(`https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&${q}&key=${key}`);
   const c=j.items?.[0]; if(!c) throw {msg:"Diesen Kanal gibt es nicht. Prüf die Schreibweise des @Handles."};
-  return {id:c.id,title:c.snippet?.title||c.id,handle:c.snippet?.customUrl||""};
+  return {id:c.id,title:c.snippet?.title||c.id,handle:c.snippet?.customUrl||"",videoCount:c.statistics?.videoCount!=null?+c.statistics.videoCount:null};
 }
 function starBtn(c){ return `<button type="button" class="star ${c.fav?"on":""}" data-fav="${c.id}" aria-pressed="${!!c.fav}" aria-label="${c.fav?"Favorit entfernen":"Als Favorit markieren"}" title="${c.fav?"Favorit entfernen":"Als Favorit markieren"}">${c.fav?"★":"☆"}</button>`; }
 function toggleFav(id){ const c=S.channels.get(id); if(!c) return; S.channels.set(id,{...c,fav:!c.fav,updatedAt:Date.now()}); persist();
@@ -1368,7 +1374,7 @@ function renderChannelList(){
         <div class="f"><label>Format beim Übernehmen</label><select data-k="format">${opt(S.lists.formats,c.format)}</select></div>
         <div class="f"><label>Tags beim Übernehmen</label><input type="text" data-k="tags" value="${esc((c.tags||[]).join(", "))}" placeholder="mit Komma trennen"></div>
       </div>
-      <div class="actions" style="justify-content:space-between"><a class="btn ghost" href="https://www.youtube.com/channel/${c.id}" target="_blank" rel="noopener">Kanal auf YouTube ↗</a>
+      <div class="actions" style="justify-content:space-between"><span class="actions" style="gap:4px"><button type="button" class="btn" data-cbrowse="${c.id}">Videos durchstöbern</button><a class="btn ghost" href="https://www.youtube.com/channel/${c.id}" target="_blank" rel="noopener">Kanal auf YouTube ↗</a></span>
         <button type="button" class="btn ghost danger" data-chdel="${c.id}">Kanal entfernen</button></div>
     </div></details>`).join("")||`<p class="hint">${S.channels.size?"Kein Kanal passt zur Suche.":"Noch keine Kanäle. Füge oben einen hinzu oder importiere deine Abos."}</p>`;
 }
@@ -1650,6 +1656,160 @@ function beApply(){
   persist(); closeLayer(); render(); toast(`${plur(n,"Video","Videos")} geändert`);
 }
 
+/* ---------- Videos eines Kanals durchstöbern und mehrere übernehmen ---------- */
+let CB=null;
+const isChannelUrl=s=>/youtube\.com\/(@[\w.\-·]+|channel\/UC[\w-]{22})(?:[/?#]|$)/i.test((s||"").trim())&&!/[?&](v|list)=/.test(s);
+function openChannelBrowse(input=""){
+  S.openId=null; S.openSeries=null; S.openFeed=null; S.playing=false;
+  CB={ch:null,items:[],sel:new Set(),page:"",done:false,loading:false,stop:false,q:"",sort:"new",hideShorts:false,hideKnown:false,useRule:true,total:null};
+  const opt=list=>`<option value="">–</option>${list.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join("")}`;
+  const abos=[...S.channels.values()].sort((a,b)=>(b.fav?1:0)-(a.fav?1:0)||a.title.localeCompare(b.title,"de"));
+  $("#layer").innerHTML=`<div class="scrim"></div><div class="modal" data-modalbg><form class="sheet" id="cbf" style="width:min(880px,100%)" novalidate>
+    <div class="sheet-head"><h2>Videos eines Kanals</h2><button type="button" class="btn ghost" data-close aria-label="Schließen">✕</button></div>
+    <div class="sheet-body">
+      <div class="f"><label for="cb-ch">Kanal</label>
+        <div class="urlrow"><input type="text" id="cb-ch" value="${esc(input)}" placeholder="youtube.com/@kanal, @kanal oder URL eines Videos" autocomplete="off" spellcheck="false"><button type="button" class="btn primary" data-cbload>Laden</button></div>
+        ${abos.length?`<select id="cb-abo" class="small-in" style="margin:0;width:auto;max-width:100%"><option value="">… oder aus deinen Abos wählen</option>${abos.map(c=>`<option value="${c.id}">${c.fav?"★ ":""}${esc(c.title)}</option>`).join("")}</select>`:""}
+        <span class="hint" id="cb-msg">${S.cfg.ytKey?"Lädt die Uploads des Kanals, neueste zuerst. Weitere Seiten lädst du unten nach.":"Dafür brauchst du den YouTube-API-Schlüssel (Einstellungen)."}</span></div>
+      <div id="cb-body" hidden>
+        <div class="cbbar">
+          <input type="search" id="cb-q" class="small-in" placeholder="In den Titeln suchen" autocomplete="off" style="margin:0;flex:1 1 220px">
+          <select id="cb-sort" class="small-in" style="margin:0;width:auto"><option value="new">Neueste zuerst</option><option value="old">Älteste zuerst</option><option value="long">Längste zuerst</option></select>
+        </div>
+        <div class="cbbar">
+          <label class="check" style="padding:0"><input type="checkbox" id="cb-shorts"> Shorts ausblenden</label>
+          <label class="check" style="padding:0"><input type="checkbox" id="cb-known"> Schon vorhandene ausblenden</label>
+          <label class="check" style="padding:0" id="cb-rulewrap" hidden><input type="checkbox" id="cb-rule" checked> <span id="cb-ruletxt"></span></label>
+        </div>
+        <div class="cbbar" style="justify-content:space-between">
+          <span class="hint mono" id="cb-count"></span>
+          <span class="actions" style="gap:4px"><button type="button" class="btn ghost" style="padding:2px 8px;font-size:12px" data-cbsel="all">Alle angezeigten auswählen</button><button type="button" class="btn ghost" style="padding:2px 8px;font-size:12px" data-cbsel="none">Auswahl aufheben</button></span>
+        </div>
+        <div class="pilist cblist" id="cb-list"></div>
+        <div class="cbbar" id="cb-more"></div>
+        <h3 style="margin-top:14px">Für die neuen Videos</h3>
+        <div class="row" style="margin-top:10px">
+          <div class="f">${lblHelp("cb-genre","Genre","genres")}<select id="cb-genre" data-lk="genres">${opt(S.lists.genres)}</select><span class="hint ghint" id="cb-genre-h"></span></div>
+          <div class="f">${lblHelp("cb-format","Format","formats")}<select id="cb-format" data-lk="formats">${opt(S.lists.formats)}</select><span class="hint ghint" id="cb-format-h"></span></div>
+          <div class="f">${lblHelp("cb-mood",moodLabel(),"moods")}<select id="cb-mood" data-lk="moods">${opt(S.lists.moods)}</select><span class="hint ghint" id="cb-mood-h"></span></div>
+        </div>
+        <div class="f" style="margin-top:12px"><label for="cb-tags">Tags</label><input type="text" id="cb-tags" list="dl-alltags4" placeholder="mit Komma trennen"><datalist id="dl-alltags4">${allTags().map(t=>`<option value="${esc(t[0])}">`).join("")}</datalist></div>
+        <label class="check"><input type="checkbox" id="cb-watched"> Als gesehen markieren</label>
+        <label class="check"><input type="checkbox" id="cb-series"> Zusätzlich als Reihe anlegen</label>
+        <div class="f" id="cb-sname-wrap" hidden><label for="cb-sname">Name der Reihe</label><input type="text" id="cb-sname"></div>
+      </div>
+    </div>
+    <div class="sheet-foot"><span class="hint err" id="cb-err"></span><div class="actions"><button type="button" class="btn ghost" data-close>Abbrechen</button><button type="submit" class="btn primary" id="cb-go" disabled>Hinzufügen</button></div></div>
+  </form></div>`;
+  const f=$("#cbf");
+  f.addEventListener("submit",e=>{ e.preventDefault(); cbImport(); });
+  $("#cb-ch").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); cbStart(); } });
+  $("#cb-abo")?.addEventListener("change",e=>{ if(!e.target.value) return; $("#cb-ch").value="https://www.youtube.com/channel/"+e.target.value; cbStart(); });
+  $("#cb-q").addEventListener("input",e=>{ CB.q=e.target.value; cbRender(); });
+  $("#cb-sort").addEventListener("change",e=>{ CB.sort=e.target.value; cbRender(); });
+  $("#cb-shorts").addEventListener("change",e=>{ CB.hideShorts=e.target.checked; cbRender(); });
+  $("#cb-known").addEventListener("change",e=>{ CB.hideKnown=e.target.checked; cbRender(); });
+  $("#cb-rule").addEventListener("change",e=>{ CB.useRule=e.target.checked; cbRender(); });
+  $("#cb-series").addEventListener("change",cbCount);
+  $("#cb-list").addEventListener("change",e=>{ const id=e.target.dataset.pick; if(!id) return; e.target.checked?CB.sel.add(id):CB.sel.delete(id); cbCount(); });
+  if(input.trim()) cbStart(); else $("#cb-ch").focus();
+}
+async function cbStart(){
+  const msg=$("#cb-msg"), raw=$("#cb-ch").value.trim(); if(!raw) return;
+  const btn=$("[data-cbload]"); btn.disabled=true; msg.className="hint"; msg.textContent="Suche Kanal …";
+  try{
+    const c=await resolveChannel(raw);
+    Object.assign(CB,{ch:c,items:[],sel:new Set(),page:"",done:false,stop:false,total:c.videoCount??null});
+    const ab=S.channels.get(c.id);
+    if(ab){ // Standardwerte und Regel aus den Abos übernehmen
+      if(ab.genre) $("#cb-genre").value=ab.genre; if(ab.format) $("#cb-format").value=ab.format; if((ab.tags||[]).length) $("#cb-tags").value=ab.tags.join(", ");
+      document.querySelectorAll("#cbf select[data-lk]").forEach(selHint);
+      const rule=chRuleSummary(ab); $("#cb-rulewrap").hidden=!rule; $("#cb-ruletxt").textContent=`Kanal-Regel anwenden (${rule})`; CB.useRule=!!rule; $("#cb-rule").checked=!!rule;
+      if(ab.hideShorts){ CB.hideShorts=true; $("#cb-shorts").checked=true; }
+    } else { $("#cb-rulewrap").hidden=true; CB.useRule=false; }
+    $("#cb-sname").value=c.title;
+    $("#cb-body").hidden=false;
+    await cbLoadPage();
+  }catch(e){ msg.className="hint err"; msg.textContent=e.msg||"Der Kanal konnte nicht geladen werden."; }
+  btn.disabled=false;
+}
+async function cbLoadPage(){
+  if(CB.done||CB.loading) return;
+  CB.loading=true; cbMore();
+  const key=encodeURIComponent(S.cfg.ytKey), upl="UU"+CB.ch.id.slice(2);
+  try{
+    const j=await ytJson(`https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails&maxResults=50&playlistId=${upl}&key=${key}${CB.page?"&pageToken="+CB.page:""}`);
+    const fresh=[];
+    for(const it of j.items||[]){ const id=it.contentDetails?.videoId, t=it.snippet?.title||"";
+      if(!id||t==="Private video"||t==="Deleted video"||CB.items.some(x=>x.id===id)) continue;
+      fresh.push({id,title:t,published:it.contentDetails?.videoPublishedAt||it.snippet?.publishedAt||""}); }
+    if(fresh.length){ const d=await ytJson(`https://www.googleapis.com/youtube/v3/videos?part=contentDetails,snippet&id=${fresh.map(x=>x.id).join(",")}&key=${key}`);
+      const m=new Map((d.items||[]).map(v=>[v.id,v]));
+      for(const x of fresh){ const v=m.get(x.id); if(!v){ continue; } if(v.snippet?.liveBroadcastContent==="upcoming") continue;
+        x.duration=isoDur(v.contentDetails?.duration); CB.items.push(x); } }
+    CB.page=j.nextPageToken||""; CB.done=!CB.page;
+  }catch(e){ CB.loading=false; cbRender(); $("#cb-msg").className="hint err";
+    $("#cb-msg").textContent=/404|nicht gefunden|playlistNotFound/i.test(e.msg||"")?"Dieser Kanal hat keine öffentlichen Videos.":(e.msg||"Videos konnten nicht geladen werden."); return false; }
+  CB.loading=false; cbRender(); return true;
+}
+async function cbLoadAll(){
+  CB.stop=false;
+  while(!CB.done&&!CB.stop&&CB.items.length<5000){ if(!(await cbLoadPage())) break; }
+  CB.stop=false; cbMore();
+}
+function cbRuleOk(x){ if(!CB.useRule) return true; const c=S.channels.get(CB.ch.id); if(!c) return true;
+  const t=x.title.toLowerCase(), inc=splitWords(c.include); if(inc.length&&!inc.some(w=>t.includes(w))) return false; return !splitWords(c.exclude).some(w=>t.includes(w)); }
+function cbVisible(){
+  const words=CB.q.toLowerCase().split(/\s+/).filter(Boolean);
+  const list=CB.items.filter(x=>(!CB.hideShorts||!(x.duration&&x.duration<=180))&&(!CB.hideKnown||!S.videos.has(x.id))&&cbRuleOk(x)&&words.every(w=>x.title.toLowerCase().includes(w)));
+  if(CB.sort==="old") list.sort((a,b)=>Date.parse(a.published)-Date.parse(b.published));
+  else if(CB.sort==="long") list.sort((a,b)=>(b.duration||0)-(a.duration||0));
+  else list.sort((a,b)=>Date.parse(b.published)-Date.parse(a.published));
+  return list;
+}
+function cbRender(){
+  if(!CB?.ch) return;
+  const vis=cbVisible();
+  $("#cb-msg").className="hint ok";
+  $("#cb-msg").textContent=`„${CB.ch.title}“: ${CB.items.length.toLocaleString("de-DE")}${CB.total!=null?` von ${Number(CB.total).toLocaleString("de-DE")}`:""} Videos geladen${CB.done?" (alle)":""}.`;
+  $("#cb-list").innerHTML=vis.length?vis.map(x=>{ const inLib=S.videos.has(x.id);
+    return `<label class="pirow ${inLib?"off":""}"><input type="checkbox" data-pick="${x.id}" ${CB.sel.has(x.id)?"checked":""} ${inLib?"disabled":""}>
+      <span class="num mono">${x.duration?fmtDur(x.duration):""}</span>${coverHTML({id:x.id,title:x.title,creator:CB.ch.title},{badges:false})}
+      <span style="min-width:0"><b>${esc(x.title)}</b><small>${esc([x.published?new Date(x.published).toLocaleDateString("de-DE"):"",x.duration&&x.duration<=180?"Short":"",inLib?"schon in der Videothek":""].filter(Boolean).join(" · "))}${x.duration?`<span class="cbdur"> · ${fmtDur(x.duration)}</span>`:""}</small></span></label>`; }).join("")
+    :`<p class="hint" style="padding:8px">${CB.loading?"Lade …":CB.items.length?"Kein geladenes Video passt zu Suche und Filtern."+(CB.done?"":" Lade weitere Videos nach, um weiter zurückzugehen."):"Keine Videos gefunden."}</p>`;
+  cbMore(); cbCount();
+}
+function cbMore(){
+  const el=$("#cb-more"); if(!el) return;
+  if(CB.loading&&!CB.stop&&CB.items.length) el.innerHTML=`<span class="hint">Lade … ${CB.items.length} Videos</span>${CB.done?"":`<button type="button" class="btn ghost" data-cbstop>Anhalten</button>`}`;
+  else el.innerHTML=CB.done?`<span class="hint">Alle Videos des Kanals sind geladen.</span>`:`<button type="button" class="btn" data-cbmore>Weitere 50 laden</button><button type="button" class="btn ghost" data-cball>Alle laden</button><span class="hint">Suche und Filter wirken nur auf geladene Videos.</span>`;
+}
+function cbCount(){
+  const vis=cbVisible(); const visSel=vis.filter(x=>CB.sel.has(x.id)).length;
+  $("#cb-count").textContent=`${plur(vis.length,"Video","Videos")} angezeigt · ${CB.sel.size} ausgewählt${CB.sel.size!==visSel?` (${CB.sel.size-visSel} davon gerade ausgeblendet)`:""}`;
+  const asS=$("#cb-series").checked; $("#cb-sname-wrap").hidden=!asS;
+  const b=$("#cb-go"); b.disabled=!CB.sel.size; b.textContent=CB.sel.size?`${plur(CB.sel.size,"Video","Videos")} hinzufügen`:"Hinzufügen";
+}
+function cbImport(){
+  const ids=CB.items.filter(x=>CB.sel.has(x.id)&&!S.videos.has(x.id)); if(!ids.length) return;
+  const asSeries=$("#cb-series").checked, sname=$("#cb-sname").value.trim();
+  if(asSeries&&!sname){ $("#cb-err").textContent="Gib der Reihe einen Namen."; $("#cb-sname").focus(); return; }
+  ids.sort((a,b)=>Date.parse(a.published)-Date.parse(b.published)); // älteste zuerst anlegen, damit „zuletzt hinzugefügt“ die neuesten oben zeigt
+  const def={genre:$("#cb-genre").value,format:$("#cb-format").value,mood:$("#cb-mood").value,
+    tags:[...new Set($("#cb-tags").value.split(",").map(t=>t.trim().toLowerCase().replace(/\s+/g," ")).filter(Boolean))]};
+  const watched=$("#cb-watched").checked;
+  ids.forEach((x,i)=>{ const v=newVideo(x.id,{title:x.title,creator:CB.ch.title,channelId:CB.ch.id,uploadDate:(x.published||"").slice(0,10),duration:x.duration||null,status:"Verfügbar"},def,i);
+    if(watched) v.watched=true; S.videos.set(x.id,v); S.deleted.delete(x.id); });
+  let sid=null;
+  if(asSeries){ const now=Date.now(); sid="s"+now.toString(36)+Math.random().toString(36).slice(2,6);
+    const order=ids.map(x=>x.id);
+    S.series.set(sid,{id:sid,name:sname,kind:"Serie",description:"",playlistId:"",videoIds:order,defaults:def,addedAt:now,updatedAt:now}); }
+  persist(); closeLayer();
+  if(sid){ S.view="series"; lsSet("view","series"); render(); openSeriesDrawer(sid); }
+  else { S.view="videos"; lsSet("view","videos"); S.sort="added"; $("#sort").value="added"; lsSet("sort","added"); render(); }
+  toast(`${plur(ids.length,"Video","Videos")} von „${CB.ch.title}“ hinzugefügt`);
+}
+
 /* ================= Bearbeiten ================= */
 let E=null;
 function openEditor(id,prefillUrl){
@@ -1664,7 +1824,7 @@ function openEditor(id,prefillUrl){
       <div class="f"><label for="e-url">YouTube-URL</label>
         <div class="urlrow"><input type="url" id="e-url" placeholder="https://www.youtube.com/watch?v=…" value="${esc(v?ytUrl(v.id):prefillUrl||"")}" ${v?"readonly":""}>
         <button type="button" class="btn" id="e-fetch">Daten holen</button></div>
-        ${v?"":`<span class="hint">Mehrere Videos oder eine Playlist? <button type="button" class="btn ghost" style="padding:0 4px;color:var(--accent)" data-bulk>Mehrere hinzufügen</button> · Du kannst auch mehrere Zeilen einfügen.</span>`}
+        ${v?"":`<span class="hint">Mehrere Videos oder eine Playlist? <button type="button" class="btn ghost" style="padding:0 4px;color:var(--accent)" data-bulk>Mehrere hinzufügen</button> · <button type="button" class="btn ghost" style="padding:0 4px;color:var(--accent)" data-cbrowse="">Videos eines Kanals auswählen</button></span>`}
         <div class="hint" id="e-urlhint">${v?"Die URL bleibt fest. Zum Ändern das Video löschen und neu anlegen.":S.cfg.ytKey?"Titel, Creator, Upload und Dauer werden beim Einfügen automatisch geholt.":"Titel und Creator werden beim Einfügen automatisch geholt."}</div>
       </div>
       <div class="f"><label for="e-title">Titel</label><input type="text" id="e-title" value="${esc(v?.title)}"></div>
@@ -1692,7 +1852,7 @@ function openEditor(id,prefillUrl){
   renderTags(); renderRx();
   document.querySelectorAll("#ed select[data-lk]").forEach(selHint);
   const url=$("#e-url");
-  url.addEventListener("paste",e=>{ const txt=e.clipboardData?.getData("text")||""; const it=parseBulk(txt).filter(x=>!x.bad);
+  url.addEventListener("paste",e=>{ const txt=e.clipboardData?.getData("text")||""; if(!E.id&&isChannelUrl(txt.trim())&&!/\s/.test(txt.trim())){ e.preventDefault(); openChannelBrowse(txt.trim()); return; } const it=parseBulk(txt).filter(x=>!x.bad);
     if(!E.id&&(it.length>1||(it.length===1&&it[0].p))){ e.preventDefault(); openBulk(txt); } });
   if(!v){ url.focus(); url.addEventListener("input",checkUrl); if(prefillUrl) checkUrl(); } else $("#e-title").focus();
   $("#e-format").addEventListener("change",renderRx);
@@ -1961,6 +2121,12 @@ document.addEventListener("click",e=>{
   if(d.lerecno!==undefined){ $("#le-rec").innerHTML=""; return; }
   if(d.lerecgo!==undefined){ applyRecommended(); return; }
   if(d.bulkedit!==undefined){ openBulkEdit(); return; }
+  if(d.cbrowse!==undefined){ const pre=d.cbrowse||(E&&!E.id&&$("#e-url")?($("#e-url").value||"").trim():""); openChannelBrowse(/^UC[\w-]{22}$/.test(pre)?"https://www.youtube.com/channel/"+pre:pre); return; }
+  if(d.cbload!==undefined){ cbStart(); return; }
+  if(d.cbmore!==undefined){ cbLoadPage(); return; }
+  if(d.cball!==undefined){ cbLoadAll(); return; }
+  if(d.cbstop!==undefined){ CB.stop=true; t.disabled=true; t.textContent="Halte an …"; return; }
+  if(d.cbsel){ if(d.cbsel==="all") for(const x of cbVisible()) if(!S.videos.has(x.id)) CB.sel.add(x.id); if(d.cbsel==="none") CB.sel.clear(); cbRender(); return; }
   if(d.bulk!==undefined){ const u=E&&!E.id?($("#e-url")?.value||"").trim():""; openBulk(u); return; }
   if(d.rxf){ S.f.rx=d.rxf; render(); return; }
   if(d.todo!==undefined){ S.f.todo=d.todo; render(); return; }
@@ -2070,6 +2236,7 @@ document.addEventListener("keydown",e=>{
 document.addEventListener("paste",e=>{ // YouTube-URL irgendwo einfügen → direkt neues Video
   if(/INPUT|TEXTAREA/.test(document.activeElement.tagName)||$("#layer").innerHTML) return;
   const txt=(e.clipboardData?.getData("text")||"").trim(); if(!/youtu/.test(txt)) return;
+  if(isChannelUrl(txt)&&!/\s/.test(txt)){ e.preventDefault(); openChannelBrowse(txt); return; }
   const items=parseBulk(txt).filter(x=>!x.bad);
   if(items.length>1||(items.length===1&&items[0].p)){ e.preventDefault(); openBulk(txt); }
   else if(items.length===1){ e.preventDefault(); openEditor(null,txt); } });

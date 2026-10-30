@@ -240,6 +240,7 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:4px 0}
 .rstag.new{border-color:var(--accent);color:var(--accent)}
 .rstag.warn{border-color:var(--warn);color:var(--warn)}
 @media (max-width:600px){.rsrow{grid-template-columns:auto 72px minmax(0,1fr)}}
+.bmlink{cursor:grab;border-style:dashed;font-weight:600}
 .optrow{display:flex;align-items:center;gap:2px}
 .optrow .opt{flex:1;min-width:0}
 .star{border:0;background:none;padding:3px 6px;border-radius:4px;color:var(--muted);font-size:15px;line-height:1}
@@ -727,12 +728,13 @@ async function fetchMeta(ids){ // → Map id → {title,creator,uploadDate,durat
         status:it.status?.privacyStatus==="private"?"Privat":"Verfügbar"});
     }
   } else {
-    for(const id of ids){
-      const r=await fetch(`https://noembed.com/embed?url=${encodeURIComponent(ytUrl(id))}`);
-      if(!r.ok) throw {msg:"Der Metadaten-Dienst ist gerade nicht erreichbar."};
-      const j=await r.json();
-      out.set(id,j.error?null:{title:j.title||"",creator:j.author_name||"",status:"Verfügbar"});
-    }
+    const queue=[...ids]; let fail=null;
+    await Promise.all(Array.from({length:Math.min(6,queue.length)},async()=>{ while(queue.length&&!fail){ const id=queue.shift();
+      try{ const r=await fetch(`https://noembed.com/embed?url=${encodeURIComponent(ytUrl(id))}`);
+        if(!r.ok){ fail={msg:"Der Metadaten-Dienst ist gerade nicht erreichbar."}; break; }
+        const j=await r.json(); out.set(id,j.error?null:{title:j.title||"",creator:j.author_name||"",status:"Verfügbar"}); }
+      catch(e){ fail={msg:"Der Metadaten-Dienst ist gerade nicht erreichbar."}; } } }));
+    if(fail) throw fail;
   }
   return out;
 }
@@ -1406,7 +1408,8 @@ function openBulk(text=""){
     <div class="sheet-body">
       <div class="f"><label for="pi-url">Video- oder Playlist-URLs</label>
         <textarea id="pi-url" class="mono" style="min-height:110px" placeholder="Eine URL pro Zeile. Playlists werden aufgelöst.">${esc(text)}</textarea>
-        <div class="actions" style="align-items:center"><button type="button" class="btn" data-piload>Videos laden</button><span class="hint" id="pi-msg">${S.cfg.ytKey?"Videos und Playlists lassen sich mischen. Eine Reihe entsteht nur, wenn du das unten auswählst.":"Einzelne Videos gehen auch ohne YouTube-API-Schlüssel. Für Playlists brauchst du ihn (Einstellungen)."}</span></div></div>
+        <div class="actions" style="align-items:center"><button type="button" class="btn" data-piload>Videos laden</button><span class="hint" id="pi-msg">${S.cfg.ytKey?"Videos und Playlists lassen sich mischen. Eine Reihe entsteht nur, wenn du das unten auswählst.":"Einzelne Videos gehen auch ohne YouTube-API-Schlüssel. Für Playlists brauchst du ihn (Einstellungen)."}</span></div>
+        <span class="hint">„Mag ich“-Liste, „Später ansehen“ oder andere YouTube-Seiten übernimmst du mit dem Lesezeichen unter <button type="button" class="btn ghost" style="padding:0 4px;color:var(--accent)" data-settings>Einstellungen</button>.</span></div>
       <div id="pi-body" hidden>
         <div class="f"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><span class="lbl">Videos</span>
           <span class="actions" style="gap:4px"><button type="button" class="btn ghost" style="padding:2px 8px;font-size:12px" data-pisel="all">Alle</button><button type="button" class="btn ghost" style="padding:2px 8px;font-size:12px" data-pisel="none">Keine</button></span></div>
@@ -1933,6 +1936,73 @@ function rsApply(){
   toast([added?`${plur(added,"Reaction","Reactions")} hinzugefügt`:"",linked?`${linked} verknüpft`:""].filter(Boolean).join(", "));
 }
 
+/* ---------- Lesezeichen: Videos von einer YouTube-Seite übernehmen ---------- */
+/* Läuft auf youtube.com. YouTube erlaubt dort kein innerHTML (Trusted Types), deshalb nur createElement/textContent. */
+function vtBookmarklet(T){
+  if(!/(^|\.)youtube\.com$/.test(location.hostname)){ alert("Dieses Lesezeichen funktioniert nur auf youtube.com. Öffne dort z. B. deine „Mag ich“-Liste und klicke es dann an."); return; }
+  if(window.__vtRun){ return; } window.__vtRun=1;
+  var origin=new URL(T).origin, stop=false, list=[];
+  var box=document.createElement("div");
+  box.style.cssText="position:fixed;right:16px;bottom:16px;z-index:2147483647;background:#161a22;color:#fff;padding:14px 16px;border-radius:10px;box-shadow:0 10px 40px rgba(0,0,0,.45);font:14px/1.45 system-ui,sans-serif;max-width:360px;display:flex;flex-direction:column;gap:10px";
+  var msg=document.createElement("div"); var row=document.createElement("div"); row.style.cssText="display:flex;gap:8px;flex-wrap:wrap";
+  box.append(msg,row); document.body.append(box);
+  function btn(label,primary,fn){ var b=document.createElement("button"); b.textContent=label; b.style.cssText="font:inherit;border:0;border-radius:6px;padding:7px 12px;cursor:pointer;"+(primary?"background:#ff7a3d;color:#1a0d05;font-weight:600":"background:#2f3644;color:#fff"); b.onclick=fn; row.append(b); return b; }
+  function close(){ stop=true; box.remove(); window.__vtRun=0; }
+  function collect(){
+    var sel=document.querySelector("ytd-playlist-video-renderer")?"ytd-playlist-video-renderer a[href*='/watch?v=']":
+      "ytd-rich-item-renderer a[href*='/watch?v='], ytd-rich-item-renderer a[href*='/shorts/'], ytd-video-renderer a[href*='/watch?v='], ytd-grid-video-renderer a[href*='/watch?v='], ytd-reel-item-renderer a[href*='/shorts/'], ytm-shorts-lockup-view-model a[href*='/shorts/']";
+    var els=document.querySelectorAll(sel);
+    if(!els.length) els=document.querySelectorAll("#primary a[href*='/watch?v='], #primary a[href*='/shorts/'], ytd-browse a[href*='/watch?v=']");
+    var seen=new Set();
+    els.forEach(function(a){ var m=a.href.match(/(?:[?&]v=|\/shorts\/)([\w-]{11})/); if(m) seen.add(m[1]); });
+    return Array.from(seen);
+  }
+  msg.textContent="Videothek: Sammle Videos, scrolle bis zum Ende …"; btn("Anhalten",false,function(){ stop=true; });
+  var last=-1, same=0, rounds=0;
+  function step(){
+    if(stop) return finish();
+    window.scrollTo(0,document.documentElement.scrollHeight);
+    var n=collect().length; rounds++;
+    msg.textContent="Videothek: "+n+" Videos gefunden, lade weiter …";
+    if(n===last) same++; else { same=0; last=n; }
+    var more=document.querySelector("ytd-continuation-item-renderer");
+    if((!more&&same>=2)||same>=8||n>=5000||rounds>600) return finish();
+    setTimeout(step,900);
+  }
+  function finish(){
+    list=collect(); row.textContent="";
+    if(!list.length){ msg.textContent="Videothek: Auf dieser Seite habe ich keine Videos gefunden."; btn("Schließen",false,close); return; }
+    window.scrollTo(0,0);
+    msg.textContent="Videothek: "+list.length+" Videos gefunden.";
+    var text=list.map(function(id){ return "https://youtu.be/"+id; }).join("\n");
+    btn("In Videothek übernehmen",true,function(){
+      var w=window.open(T+(T.indexOf("?")<0?"?":"&")+"import=yt","_blank");
+      if(!w){ msg.textContent="Das Fenster wurde blockiert. Erlaube Pop-ups für youtube.com oder nutze „Kopieren“."; return; }
+      var sent=false;
+      window.addEventListener("message",function(e){ if(e.origin!==origin||e.data!=="videothek-ready"||sent) return; sent=true;
+        w.postMessage({type:"videothek-import",urls:text,source:document.title},origin); msg.textContent="Videothek: "+list.length+" Videos übergeben. Wechsle zum Videothek-Tab."; });
+    });
+    btn("Kopieren",false,function(){
+      var done=function(){ msg.textContent="Videothek: "+list.length+" Links kopiert. Füge sie in der Videothek ein."; };
+      if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done,fallback); else fallback();
+      function fallback(){ var ta=document.createElement("textarea"); ta.value=text; ta.style.cssText="width:100%;height:120px;font:12px monospace"; box.insertBefore(ta,row); ta.select(); try{ document.execCommand("copy"); done(); }catch(err){ msg.textContent="Markiere den Text und kopiere ihn mit Strg/Cmd+C."; } }
+    });
+    btn("Schließen",false,close);
+  }
+  step();
+}
+const bookmarkletHref=()=>"javascript:"+encodeURIComponent("("+vtBookmarklet.toString()+")("+JSON.stringify(location.origin+location.pathname)+")");
+function listenForYtImport(){
+  if(new URLSearchParams(location.search).get("import")!=="yt"||!window.opener) return;
+  history.replaceState(null,"",location.pathname);
+  window.addEventListener("message",e=>{
+    if(!/^https:\/\/(www|m)\.youtube\.com$/.test(e.origin)) return;
+    const d=e.data; if(!d||d.type!=="videothek-import"||typeof d.urls!=="string") return;
+    openBulk(d.urls.slice(0,120000)); toast("Videos von YouTube übernommen. Prüfe die Auswahl und klicke auf Hinzufügen.");
+  });
+  for(const o of ["https://www.youtube.com","https://m.youtube.com"]) try{ window.opener.postMessage("videothek-ready",o); }catch(err){}
+}
+
 /* ================= Bearbeiten ================= */
 let E=null;
 function openEditor(id,prefillUrl){
@@ -2169,6 +2239,10 @@ function openSettings(){
       <div class="f"><label for="s-yt">API-Schlüssel</label><input type="password" id="s-yt" value="${esc(c.ytKey)}" placeholder="AIza…" autocomplete="off" spellcheck="false">
         <span class="hint">Damit holt die Videothek auch Upload-Datum und Dauer. Ohne Schlüssel nur Titel und Creator.</span></div>
       <hr class="sep">
+      <h3>Videos von YouTube-Seiten übernehmen</h3>
+      <p class="hint" style="margin:0">Ziehe diesen Knopf in die Lesezeichenleiste deines Browsers (am Computer). Öffne dann auf YouTube eine Seite mit Videos, z. B. deine <a href="https://www.youtube.com/playlist?list=LL" target="_blank" rel="noopener">„Mag ich“-Liste</a>, <a href="https://www.youtube.com/playlist?list=WL" target="_blank" rel="noopener">„Später ansehen“</a>, eine Kanal- oder Suchseite, und klicke auf das Lesezeichen. Es scrollt bis zum Ende, sammelt alle Videos und öffnet die Videothek mit der Auswahl.</p>
+      <div class="actions" style="align-items:center"><a class="btn bmlink" href="${esc(bookmarkletHref())}" draggable="true" title="In die Lesezeichenleiste ziehen">⧉ Videothek: Videos übernehmen</a><span class="hint">Nicht anklicken, sondern in die Lesezeichenleiste ziehen.</span></div>
+      <hr class="sep">
       <h3>Bibliothek pflegen</h3>
       <p class="hint" id="s-storage" style="margin:0">Speicher wird geprüft …</p>
       <div class="actions">
@@ -2231,6 +2305,7 @@ let tt; function toast(m){ clearTimeout(tt); let el=$(".toast"); if(!el){el=docu
 document.addEventListener("click",e=>{
   const t=e.target.closest("button,a,label,[data-close],[data-modalbg],[data-helpbg]"); if(!t) return;
   const d=t.dataset;
+  if(t.classList.contains("bmlink")){ e.preventDefault(); toast("Zieh den Knopf in deine Lesezeichenleiste und klicke ihn dann auf YouTube an."); return; }
   if(d.helpbg!==undefined){ if(e.target===t) closeHelp(); return; }
   if(d.closehelp!==undefined){ closeHelp(); return; }
   if(d.help){ e.preventDefault(); openHelp(d.help); return; }
@@ -2391,6 +2466,7 @@ const addParam=new URLSearchParams(location.search).get("add");
   S.storeLoaded=true;
   setSync(); showNotice(); render();
   requestPersist();
+  listenForYtImport();
   const feedAuto=()=>{ if(S.view==="feed"&&S.cfg.ytKey&&S.channels.size&&Date.now()-F.fetchedAt>30*6e4) refreshFeed(); };
   if(GH.ready()) pull({quiet:!!cache}).then(()=>{ if(S.dirty) push(); feedAuto(); }); else feedAuto();
   if(addParam&&parseId(addParam)){ history.replaceState(null,"",location.pathname); openEditor(null,addParam); }

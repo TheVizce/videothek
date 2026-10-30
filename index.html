@@ -234,6 +234,12 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:4px 0}
 .cblist .pirow{grid-template-columns:auto 56px 96px minmax(0,1fr)}
 .cbdur{display:none}
 @media (max-width:600px){.cblist .pirow{grid-template-columns:auto 72px minmax(0,1fr)}.cblist .pirow .num{display:none}.cbdur{display:inline}}
+.rsrow{grid-template-columns:auto 96px minmax(0,1fr)}
+.rstags{display:flex;flex-wrap:wrap;gap:4px;margin-top:3px}
+.rstag{font-size:11px;padding:0 6px;border-radius:3px;border:1px solid var(--line);color:var(--muted)}
+.rstag.new{border-color:var(--accent);color:var(--accent)}
+.rstag.warn{border-color:var(--warn);color:var(--warn)}
+@media (max-width:600px){.rsrow{grid-template-columns:auto 72px minmax(0,1fr)}}
 .optrow{display:flex;align-items:center;gap:2px}
 .optrow .opt{flex:1;min-width:0}
 .star{border:0;background:none;padding:3px 6px;border-radius:4px;color:var(--muted);font-size:15px;line-height:1}
@@ -866,7 +872,7 @@ function drawerRest(v,originals,reacts,row){
       ${originals.length?`<div class="sec"><h4>Reaction auf</h4><div class="linklist">${originals.map(o=>miniHTML(o)).join("")}</div></div>`:""}
       ${v.extOrig?`<div class="sec"><h4>${originals.length?"Außerdem Reaction auf":"Reaction auf"}</h4><div class="extorig">Kein YouTube-Video${v.extOrig.note?`: <b>${esc(v.extOrig.note)}</b>`:""}${/^https?:\/\//i.test(v.extOrig.url||"")?` · <a href="${esc(v.extOrig.url)}" target="_blank" rel="noopener">Link ↗</a>`:""}</div></div>`:""}
       ${isRxFormat(v.format)&&!(v.reactsTo||[]).length&&!v.extOrig?`<div class="notice"><span>Für diese Reaction ist noch kein Original hinterlegt.</span><button class="btn" data-edit="${v.id}">Original hinterlegen</button></div>`:""}
-      ${reacts.length?`<div class="sec"><h4>Reactions auf dieses Video (${reacts.length})</h4><div class="linklist">${reacts.map(o=>miniHTML(o)).join("")}</div></div>`:""}
+      <div class="sec"><h4 style="display:flex;justify-content:space-between;align-items:center;gap:8px">${reacts.length?`Reactions auf dieses Video (${reacts.length})`:"Reactions"}<button class="btn ghost" style="padding:2px 8px;font-size:12px;text-transform:none;letter-spacing:0;font-family:var(--f-body)" data-rxsearch="${v.id}">Reactions suchen</button></h4>${reacts.length?`<div class="linklist">${reacts.map(o=>miniHTML(o)).join("")}</div>`:""}</div>
       <div>${S.confirmDel?`<div class="confirm"><span>Video endgültig aus der Bibliothek löschen?</span><button class="btn danger" data-del-yes>Löschen</button><button class="btn ghost" data-del-no>Abbrechen</button></div>`
         :`<button class="btn ghost danger" data-del>Aus Bibliothek löschen</button>`}</div>`;
 }
@@ -1810,6 +1816,123 @@ function cbImport(){
   toast(`${plur(ids.length,"Video","Videos")} von „${CB.ch.title}“ hinzugefügt`);
 }
 
+/* ---------- Reactions zu einem Video suchen (Videothek + YouTube) ---------- */
+let RS=null;
+const ytSearchUrl=id=>"https://www.youtube.com/results?search_query="+encodeURIComponent('"'+id+'"');
+function openReactionSearch(origId){
+  const o=S.videos.get(origId); if(!o) return;
+  S.openId=null; S.openSeries=null; S.openFeed=null; S.playing=false;
+  RS={orig:o,lib:null,libErr:"",yt:[],ytPage:"",ytDone:false,ytLoading:false,ytErr:"",ytStarted:false,sel:new Set(),onlyLink:true,hideShorts:false};
+  const rxFmt=S.lists.formats.find(isRxFormat)||"";
+  const opt=(list,val)=>`<option value="">–</option>${[...new Set([...list,...(val&&!list.includes(val)?[val]:[])])].map(x=>`<option value="${esc(x)}" ${x===val?"selected":""}>${esc(x)}</option>`).join("")}`;
+  $("#layer").innerHTML=`<div class="scrim"></div><div class="modal" data-modalbg><form class="sheet" id="rsf" style="width:min(880px,100%)" novalidate>
+    <div class="sheet-head"><h2>Reactions suchen</h2><button type="button" class="btn ghost" data-close aria-label="Schließen">✕</button></div>
+    <div class="sheet-body">
+      <div><span class="lbl hint">Original</span>${miniHTML(o,"data-noop")}</div>
+      <section><h3>In deiner Videothek</h3><p class="hint" style="margin:4px 0 8px">Videos, die dieses Original in der Beschreibung verlinken, aber noch nicht damit verknüpft sind.</p><div id="rs-lib"></div></section>
+      <section><h3>Auf YouTube</h3>
+        <p class="hint" style="margin:4px 0 8px">Sucht nach der Video-ID in Anführungszeichen. So findet YouTube Videos, die das Original in Titel oder Beschreibung nennen. Eine Suche kostet 100 Einheiten deines Tageskontingents (10.000).</p>
+        <div class="cbbar"><button type="button" class="btn" id="rs-ytbtn" data-rsyt ${S.cfg.ytKey?"":"disabled"}>Auf YouTube suchen</button><a class="btn ghost" href="${ytSearchUrl(o.id)}" target="_blank" rel="noopener">Selbst auf YouTube suchen ↗</a>
+          ${S.cfg.ytKey?"":`<span class="hint">Für die Suche hier brauchst du den YouTube-API-Schlüssel. Der Link funktioniert auch ohne.</span>`}</div>
+        <div id="rs-ytopts" class="cbbar" hidden>
+          <label class="check" style="padding:0"><input type="checkbox" id="rs-onlylink" checked> Nur Treffer, die das Original in der Beschreibung verlinken</label>
+          <label class="check" style="padding:0"><input type="checkbox" id="rs-shorts"> Shorts ausblenden</label></div>
+        <div id="rs-yt"></div></section>
+      <section id="rs-new" hidden><h3>Für neu hinzugefügte Reactions</h3>
+        <div class="row" style="margin-top:10px">
+          <div class="f">${lblHelp("rs-genre","Genre","genres")}<select id="rs-genre" data-lk="genres">${opt(S.lists.genres,o.genre)}</select><span class="hint ghint" id="rs-genre-h"></span></div>
+          <div class="f">${lblHelp("rs-format","Format","formats")}<select id="rs-format" data-lk="formats">${opt(S.lists.formats,rxFmt)}</select><span class="hint ghint" id="rs-format-h"></span></div>
+          <div class="f">${lblHelp("rs-mood",moodLabel(),"moods")}<select id="rs-mood" data-lk="moods">${opt(S.lists.moods,"")}</select><span class="hint ghint" id="rs-mood-h"></span></div>
+        </div>
+        <div class="f" style="margin-top:12px"><label for="rs-tags">Tags</label><input type="text" id="rs-tags" value="${esc((o.tags||[]).join(", "))}" placeholder="mit Komma trennen"></div>
+        <label class="check"><input type="checkbox" id="rs-watched"> Als gesehen markieren</label>
+        <p class="hint" style="margin:0">Genre und Tags sind vom Original vorausgefüllt.</p></section>
+    </div>
+    <div class="sheet-foot"><span class="hint" id="rs-count"></span><div class="actions"><button type="button" class="btn ghost" data-close>Abbrechen</button><button type="submit" class="btn primary" id="rs-go" disabled>Übernehmen</button></div></div>
+  </form></div>`;
+  document.querySelectorAll("#rsf select[data-lk]").forEach(selHint);
+  $("#rsf").addEventListener("submit",e=>{ e.preventDefault(); rsApply(); });
+  $("#rsf").addEventListener("change",e=>{ const t=e.target;
+    if(t.dataset.rspick){ t.checked?RS.sel.add(t.dataset.rspick):RS.sel.delete(t.dataset.rspick); rsCount(); }
+    if(t.id==="rs-onlylink"){ RS.onlyLink=t.checked; rsRenderYt(); }
+    if(t.id==="rs-shorts"){ RS.hideShorts=t.checked; rsRenderYt(); } });
+  rsLib();
+}
+function rsRow(x,{inLib,linked,hasLink,note}={}){
+  const v=S.videos.get(x.id)||x;
+  return `<label class="pirow rsrow ${linked?"off":""}"><input type="checkbox" data-rspick="${x.id}" ${RS.sel.has(x.id)?"checked":""} ${linked?"disabled":""}>
+    ${coverHTML({id:x.id,title:v.title||x.title,creator:v.creator||x.channelTitle},{badges:false})}
+    <span style="min-width:0"><b>${esc(v.title||x.title||"Ohne Titel")}</b><small>${esc([v.creator||x.channelTitle,x.published?new Date(x.published).toLocaleDateString("de-DE"):"",(v.duration||x.duration)?fmtDur(v.duration||x.duration):""].filter(Boolean).join(" · "))}</small>
+    <span class="rstags">${linked?'<span class="rstag">schon verknüpft</span>':inLib?'<span class="rstag">in der Videothek: wird verknüpft</span>':'<span class="rstag new">neu: wird hinzugefügt</span>'}${hasLink===false?'<span class="rstag warn">Original nicht in der Beschreibung</span>':""}${note?`<span class="rstag">${esc(note)}</span>`:""}</span></span></label>`;
+}
+async function rsLib(){
+  const box=$("#rs-lib"), oid=RS.orig.id;
+  const cand=[...S.videos.values()].filter(v=>v.id!==oid&&!(v.reactsTo||[]).includes(oid));
+  if(!S.cfg.ytKey){ // ohne Schlüssel keine Beschreibungen: nur Titel prüfen
+    const words=(RS.orig.title||"").toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(w=>w.length>=5);
+    RS.lib=cand.filter(v=>isReaction(v)&&words.filter(w=>(v.title||"").toLowerCase().includes(w)).length>=Math.min(2,words.length)&&words.length);
+    box.innerHTML=(RS.lib.length?RS.lib.map(v=>rsRow(v,{inLib:true,note:"ähnlicher Titel"})).join(""):'<p class="hint">Keine passenden Reactions gefunden.</p>')
+      +'<p class="hint">Ohne YouTube-API-Schlüssel kann ich die Beschreibungen nicht prüfen und vergleiche nur die Titel.</p>';
+    rsCount(); return;
+  }
+  box.innerHTML=`<p class="hint">Prüfe ${plur(cand.length,"Video","Videos")} deiner Videothek …</p>`;
+  try{ const meta=await fetchMeta(cand.map(v=>v.id));
+    RS.lib=cand.filter(v=>{ const m=meta.get(v.id); return m&&((m.desc||"").includes(oid)||(m.title||"").includes(oid)); });
+    box.innerHTML=RS.lib.length?RS.lib.map(v=>rsRow(v,{inLib:true})).join(""):'<p class="hint">Kein weiteres Video deiner Videothek verlinkt dieses Original.</p>';
+  }catch(e){ box.innerHTML=`<p class="hint err">${esc(e.msg||"Die Beschreibungen konnten nicht geprüft werden.")}</p>`; }
+  rsCount();
+}
+async function rsYt(){
+  if(RS.ytLoading||RS.ytDone) return;
+  RS.ytLoading=true; RS.ytStarted=true; RS.ytErr=""; $("#rs-ytopts").hidden=false; rsRenderYt();
+  const key=encodeURIComponent(S.cfg.ytKey), oid=RS.orig.id;
+  try{
+    const j=await ytJson(`https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=50&q=${encodeURIComponent('"'+oid+'"')}&key=${key}${RS.ytPage?"&pageToken="+RS.ytPage:""}`);
+    const ids=(j.items||[]).map(it=>it.id?.videoId).filter(id=>id&&id!==oid&&!RS.yt.some(x=>x.id===id));
+    if(ids.length){ const d=await ytJson(`https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=${ids.join(",")}&key=${key}`);
+      for(const v of d.items||[]){ if(v.snippet?.liveBroadcastContent==="upcoming") continue;
+        RS.yt.push({id:v.id,title:v.snippet?.title||"",channelTitle:v.snippet?.channelTitle||"",channelId:v.snippet?.channelId||"",published:v.snippet?.publishedAt||"",
+          duration:isoDur(v.contentDetails?.duration),hasLink:(v.snippet?.description||"").includes(oid)||(v.snippet?.title||"").includes(oid)}); } }
+    RS.ytPage=j.nextPageToken||""; RS.ytDone=!RS.ytPage;
+  }catch(e){ RS.ytErr=e.msg||"Die YouTube-Suche ist fehlgeschlagen."; }
+  RS.ytLoading=false; rsRenderYt();
+}
+function rsRenderYt(){
+  const box=$("#rs-yt"); if(!box) return; const oid=RS.orig.id;
+  const libIds=new Set((RS.lib||[]).map(v=>v.id));
+  const all=RS.yt.filter(x=>!libIds.has(x.id));
+  const vis=all.filter(x=>(!RS.onlyLink||x.hasLink)&&(!RS.hideShorts||!(x.duration&&x.duration<=180)));
+  const hidden=all.length-vis.length;
+  box.innerHTML=(RS.ytErr?`<p class="hint err">${esc(RS.ytErr)}</p>`:"")
+    +(vis.map(x=>{ const v=S.videos.get(x.id); return rsRow(x,{inLib:!!v,linked:!!v&&(v.reactsTo||[]).includes(oid),hasLink:x.hasLink}); }).join("")
+      ||(RS.ytStarted&&!RS.ytLoading&&!RS.ytErr?'<p class="hint">Keine Treffer.</p>':""))
+    +(RS.ytStarted?`<div class="cbbar" style="margin-top:8px">${RS.ytLoading?'<span class="hint">Suche auf YouTube …</span>':""}${hidden?`<span class="hint">${plur(hidden,"Treffer","Treffer")} durch Filter ausgeblendet.</span>`:""}${!RS.ytLoading&&!RS.ytDone&&RS.yt.length?'<button type="button" class="btn" data-rsyt>Weitere Treffer laden (100 Einheiten)</button>':""}</div>`:"");
+  if(RS.ytStarted){ const tb=$("#rs-ytbtn"); tb.disabled=true; tb.textContent=RS.ytLoading?"Suche …":"Gesucht"; }
+  rsCount();
+}
+function rsCount(){
+  const newIds=[...RS.sel].filter(id=>!S.videos.has(id)), link=[...RS.sel].filter(id=>S.videos.has(id));
+  $("#rs-new").hidden=!newIds.length;
+  $("#rs-count").textContent=RS.sel.size?[newIds.length?`${plur(newIds.length,"neues Video","neue Videos")}`:"",link.length?`${link.length} zum Verknüpfen`:""].filter(Boolean).join(" · "):"";
+  const b=$("#rs-go"); b.disabled=!RS.sel.size; b.textContent=RS.sel.size?`${plur(RS.sel.size,"Reaction","Reactions")} übernehmen`:"Übernehmen";
+}
+function rsApply(){
+  const oid=RS.orig.id, now=Date.now(); let added=0, linked=0;
+  const def={genre:$("#rs-genre").value,format:$("#rs-format").value,mood:$("#rs-mood").value,
+    tags:[...new Set($("#rs-tags").value.split(",").map(t=>t.trim().toLowerCase().replace(/\s+/g," ")).filter(Boolean))]};
+  const watched=$("#rs-watched").checked;
+  const newOnes=RS.yt.filter(x=>RS.sel.has(x.id)&&!S.videos.has(x.id)).sort((a,b)=>Date.parse(a.published)-Date.parse(b.published));
+  newOnes.forEach((x,i)=>{ const v=newVideo(x.id,{title:x.title,creator:x.channelTitle,channelId:x.channelId,uploadDate:(x.published||"").slice(0,10),duration:x.duration||null,status:"Verfügbar"},def,i);
+    v.reactsTo=[oid]; if(watched) v.watched=true; S.videos.set(x.id,v); S.deleted.delete(x.id); added++; });
+  for(const id of RS.sel){ const v=S.videos.get(id); if(!v||newOnes.some(x=>x.id===id)||(v.reactsTo||[]).includes(oid)) continue;
+    const p={reactsTo:[...(v.reactsTo||[]),oid],updatedAt:now};
+    if(!v.genre&&RS.orig.genre) p.genre=RS.orig.genre;
+    if(!v.format){ const rf=S.lists.formats.find(isRxFormat); if(rf) p.format=rf; }
+    S.videos.set(id,{...v,...p}); linked++; }
+  persist(); closeLayer(); render(); openDrawer(oid);
+  toast([added?`${plur(added,"Reaction","Reactions")} hinzugefügt`:"",linked?`${linked} verknüpft`:""].filter(Boolean).join(", "));
+}
+
 /* ================= Bearbeiten ================= */
 let E=null;
 function openEditor(id,prefillUrl){
@@ -2121,6 +2244,8 @@ document.addEventListener("click",e=>{
   if(d.lerecno!==undefined){ $("#le-rec").innerHTML=""; return; }
   if(d.lerecgo!==undefined){ applyRecommended(); return; }
   if(d.bulkedit!==undefined){ openBulkEdit(); return; }
+  if(d.rxsearch){ openReactionSearch(d.rxsearch); return; }
+  if(d.rsyt!==undefined){ rsYt(); return; }
   if(d.cbrowse!==undefined){ const pre=d.cbrowse||(E&&!E.id&&$("#e-url")?($("#e-url").value||"").trim():""); openChannelBrowse(/^UC[\w-]{22}$/.test(pre)?"https://www.youtube.com/channel/"+pre:pre); return; }
   if(d.cbload!==undefined){ cbStart(); return; }
   if(d.cbmore!==undefined){ cbLoadPage(); return; }

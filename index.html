@@ -2478,5 +2478,7 @@ const addParam=new URLSearchParams(location.search).get("add");
   if(addParam&&parseId(addParam)){ history.replaceState(null,"",location.pathname); openEditor(null,addParam); }
 })();
 </script>
+<!-- Zurück zur Startseite (gemeinsam für alle Tools) -->
+<script src="/startseite/nav-v1.js" defer></script>
 </body>
 </html>

@@ -1,6 +1,6 @@
 # Videothek
 
-Persönliche Bibliothek für YouTube-Videos. Eine einzige Datei (`index.html`), gehostet auf GitHub Pages. Die Daten liegen als `library.json` in einem separaten, privaten Repo.
+Persönliche Bibliothek für YouTube-Videos. Eine einzige Datei (`index.html`), gehostet auf GitHub Pages. Die Daten liegen lokal im Browser (IndexedDB `videothek-tool`) und werden über den gemeinsamen GitHub-Sync der Tools mit dem privaten Repo `tool-daten` abgeglichen (Ordner `videothek/`). Repo und Token werden einmal pro Gerät auf der Startseite eingetragen.
 
 ## Einrichtung (ca. 10 Minuten)
 
@@ -12,25 +12,12 @@ Persönliche Bibliothek für YouTube-Videos. Eine einzige Datei (`index.html`), 
 
 Die Seite selbst enthält keine Daten. Wer die Adresse kennt, sieht nur eine leere Bibliothek.
 
-### 2. Repo für die Daten anlegen (privat)
-1. Neues Repo anlegen, z. B. `videothek-daten`, Sichtbarkeit **Private**.
-2. Häkchen bei „Add a README file“ setzen, damit der Branch `main` existiert. Die `library.json` legt die Videothek selbst an.
+### 2. Sync einrichten
+Auf der Startseite (`/startseite/`) unter „GitHub-Sync“ das private Daten-Repo und den Token eintragen – einmal pro Gerät. Die Videothek gleicht danach automatisch ab. Beim ersten Abgleich eines weiteren Geräts wird der Cloud-Stand übernommen (außer das Gerät hat noch nicht hochgeladene Änderungen, dann wird zusammengeführt).
 
-### 3. Token erstellen
-1. GitHub → Profilbild → *Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token*.
-2. Name z. B. „Videothek“, Ablaufdatum nach Wunsch (bei Ablauf einfach ein neues eintragen).
-3. **Repository access:** *Only select repositories* → nur `videothek-daten`.
-4. **Permissions → Repository permissions → Contents:** *Read and write*. Sonst nichts.
-5. Token erzeugen und kopieren (beginnt mit `github_pat_`).
+Bis 02.11.2026 lag die Bibliothek im eigenen Repo `videothek-daten` (`library.json`) mit eigenem Token; dieses Repo wird nicht mehr benutzt.
 
-### 4. Videothek verbinden
-1. Die Seite öffnen → **Einstellungen**.
-2. Besitzer (dein GitHub-Name), Daten-Repo (`videothek-daten`), Branch (`main`), Datei (`library.json`) und Token eintragen.
-3. **Speichern & verbinden.** Oben rechts steht danach „Synchron“.
-
-Auf jedem weiteren Gerät (z. B. Handy) einmal dieselben Einstellungen eintragen.
-
-### 5. Optional: YouTube-API-Schlüssel für Upload-Datum und Dauer
+### 3. Optional: YouTube-API-Schlüssel für Upload-Datum und Dauer
 Ohne Schlüssel holt die Videothek Titel und Creator automatisch. Mit Schlüssel auch Upload-Datum, Dauer und den Status (privat / gelöscht).
 
 1. [Google Cloud Console](https://console.cloud.google.com/) → neues Projekt anlegen.

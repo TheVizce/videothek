@@ -342,6 +342,8 @@ html{--dw:min(560px,100%)}
 <div id="layer"></div>
 <div id="layer2"></div>
 
+<!-- GitHub-Sync (gemeinsam für alle Tools, Einstellungen auf der Startseite) -->
+<script src="/startseite/sync-v1.js"></script>
 <script>
 "use strict";
 const STATUSES = ["Verfügbar","Nicht mehr verfügbar","Privat"];
@@ -520,38 +522,31 @@ function exportJSON(){
 function b64ToUtf8(b64){ const bin=atob(b64.replace(/\s/g,"")); const bytes=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i); return new TextDecoder().decode(bytes); }
 function utf8ToB64(str){ const bytes=new TextEncoder().encode(str); let bin=""; for(let i=0;i<bytes.length;i+=0x8000) bin+=String.fromCharCode.apply(null,bytes.subarray(i,i+0x8000)); return btoa(bin); }
 
-const GH = {
-  cfg(){ return S.cfg; },
-  ready(){ const c=S.cfg; return !!(c.owner&&c.repo&&c.token); },
-  url(){ const c=S.cfg; return `https://api.github.com/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/${c.path.split("/").map(encodeURIComponent).join("/")}`; },
-  headers(extra={}){ return {"Authorization":"Bearer "+S.cfg.token,"Accept":"application/vnd.github+json","X-GitHub-Api-Version":"2022-11-28",...extra}; },
-  async read(){
-    const r=await fetch(this.url()+"?ref="+encodeURIComponent(S.cfg.branch)+"&t="+Date.now(),{headers:this.headers(),cache:"no-store"});
-    if(r.status===404){ // Datei fehlt noch oder Repo nicht gefunden
-      const repo=await fetch(`https://api.github.com/repos/${encodeURIComponent(S.cfg.owner)}/${encodeURIComponent(S.cfg.repo)}`,{headers:this.headers(),cache:"no-store"});
-      if(!repo.ok) throw ghErr(repo.status,"repo");
-      return {sha:null,data:null};
+/* GitHub-Sync: gemeinsamer Sync aller Tools (/startseite/sync-v1.js), privates Repo tool-daten, Ordner videothek/.
+   Repo und Token werden einmal pro Gerät auf der Startseite eingetragen. Bis 02.11.2026 lag die Bibliothek
+   im eigenen Repo videothek-daten (library.json) mit eigenem Token. */
+let SYNC=null;
+const GH = { ready(){ return !!(SYNC&&SYNC.configured); } };
+function initSync(){
+  if(S.cfg.token||S.cfg.owner||S.cfg.repo){ S.cfg={...S.cfg,owner:"",repo:"",token:""}; Store.set("config",S.cfg).catch(e=>storeFail(e,"Die Einstellungen")); } // alten Token nicht weiter aufbewahren
+  if(!window.ToolSync) return;
+  SYNC=ToolSync.create({
+    tool:"videothek",
+    collections:{videos:"array",series:"array",channels:"array",feedHidden:{type:"map",shard:true}},
+    fields:["lists","listsUpdatedAt"],
+    shards:16,
+    // weitere Geräte übernehmen beim ersten Mal den Cloud-Stand – außer sie haben noch nicht hochgeladene Änderungen
+    firstSync:S.dirty?undefined:"cloud",
+    get:()=>({videos:[...S.videos.values()],series:[...S.series.values()],channels:[...S.channels.values()],feedHidden:S.feedHidden,lists:S.lists,listsUpdatedAt:S.listsUpdatedAt||0}),
+    apply:async d=>{ applyData(d); S.loaded=true; const ok=await flushCache(); render(); return ok; },
+    onStatus:(st,txt)=>{
+      S.syncState=st==="ok"?"ok":(st==="error"||st==="offline")?"err":"busy"; S.syncErr=txt||"";
+      if(st==="ok"){ S.dirty=false; S.deleted.clear(); S.deletedSeries.clear(); S.deletedChannels.clear(); S.unhidden.clear(); cacheLocal(); }
+      setSync(); showNotice();
     }
-    if(!r.ok) throw ghErr(r.status);
-    const j=await r.json();
-    let text;
-    if(j.content) text=b64ToUtf8(j.content);
-    else { // > 1 MB: Rohinhalt separat holen
-      const raw=await fetch(this.url()+"?ref="+encodeURIComponent(S.cfg.branch),{headers:this.headers({"Accept":"application/vnd.github.raw+json"}),cache:"no-store"});
-      if(!raw.ok) throw ghErr(raw.status); text=await raw.text();
-    }
-    let data; try{ data=JSON.parse(text); }catch(e){ throw {msg:`${S.cfg.path} im Repo ist kein gültiges JSON. Korrigiere oder lösche die Datei auf GitHub.`}; }
-    return {sha:j.sha,data};
-  },
-  async write(data,sha){
-    const body={message:"Videothek aktualisiert",content:utf8ToB64(JSON.stringify(data,null,1)),branch:S.cfg.branch};
-    if(sha) body.sha=sha;
-    const r=await fetch(this.url(),{method:"PUT",headers:this.headers({"Content-Type":"application/json"}),body:JSON.stringify(body)});
-    if(r.status===409||r.status===422) throw {conflict:true};
-    if(!r.ok) throw ghErr(r.status);
-    const j=await r.json(); return j.content.sha;
-  }
-};
+  });
+  SYNC.start();
+}
 function ghErr(status,what){
   const m={401:"Das GitHub-Token ist ungültig oder abgelaufen. Trag in den Einstellungen ein neues ein.",
     403:"GitHub verweigert den Zugriff. Prüf, ob das Token für dieses Repo die Berechtigung „Contents: Read and write“ hat.",
@@ -589,40 +584,16 @@ let cacheTimer=null;
 function cacheLocal(){ clearTimeout(cacheTimer); cacheTimer=setTimeout(flushCache,250); }
 async function flushCache(){
   clearTimeout(cacheTimer); cacheTimer=null;
-  if(!S.storeLoaded) return; // nie einen leeren Startzustand über echte Daten schreiben
+  if(!S.storeLoaded) return false; // nie einen leeren Startzustand über echte Daten schreiben
   try{ await Store.set("library",{data:snapshotData(),sha:S.sha,dirty:S.dirty,deleted:[...S.deleted],deletedSeries:[...S.deletedSeries],deletedChannels:[...S.deletedChannels],unhidden:[...S.unhidden],repoKey:repoKey()});
-    if(S.storeErr){ S.storeErr=""; showNotice(); } }
-  catch(e){ storeFail(e); }
+    if(S.storeErr){ S.storeErr=""; showNotice(); } return true; }
+  catch(e){ storeFail(e); return false; }
 }
 const repoKey=()=>`${S.cfg.owner}/${S.cfg.repo}@${S.cfg.branch}:${S.cfg.path}`;
 
-let pushTimer=null, pushing=false;
-function persist(){ S.dirty=true; cacheLocal(); setSync(); if(!GH.ready()) return; clearTimeout(pushTimer); pushTimer=setTimeout(push,1200); }
-async function push(){
-  if(!GH.ready()||!S.dirty) return;
-  if(pushing){ clearTimeout(pushTimer); pushTimer=setTimeout(push,800); return; }
-  pushing=true; S.syncState="busy"; setSync();
-  try{
-    for(let attempt=0;attempt<3;attempt++){
-      try{ S.sha=await GH.write(snapshotData(),S.sha); S.dirty=false; S.deleted.clear(); S.deletedSeries.clear(); S.deletedChannels.clear(); S.unhidden.clear(); S.syncState="ok"; S.syncErr=""; break; }
-      catch(e){ if(!e.conflict||attempt===2) throw e; const remote=await GH.read(); S.sha=remote.sha; mergeRemote(remote.data); render(); }
-    }
-  }catch(e){ S.syncState="err"; S.syncErr=e.msg||"Speichern auf GitHub fehlgeschlagen. Prüf deine Verbindung."; }
-  pushing=false; cacheLocal(); setSync(); showNotice();
-}
-async function pull({quiet}={}){
-  if(!GH.ready()) return;
-  if(!quiet){ S.syncState="busy"; setSync(); }
-  try{
-    const remote=await GH.read();
-    if(S.dirty){ mergeRemote(remote.data); S.sha=remote.sha; persist(); }
-    else if(remote.sha!==S.sha||!quiet){ if(remote.data) applyData(remote.data); else { S.videos=new Map(); S.series=new Map(); S.channels=new Map(); S.feedHidden={}; } S.sha=remote.sha; }
-    S.syncState=S.dirty?"busy":"ok"; S.syncErr="";
-    if(!remote.sha&&!S.dirty){ S.syncState="ok"; }
-    cacheLocal();
-  }catch(e){ S.syncState="err"; S.syncErr=e.msg||"GitHub ist gerade nicht erreichbar. Deine Änderungen bleiben in diesem Browser gespeichert."; }
-  S.loaded=true; setSync(); showNotice(); render();
-}
+function persist(){ S.dirty=true; cacheLocal(); setSync(); if(SYNC) SYNC.changed(); }
+function push(){ return SYNC?SYNC.syncNow():Promise.resolve(); }
+function pull(){ return SYNC?SYNC.syncNow():Promise.resolve(); }
 function setSync(){
   const b=$("#sync"); if(!b) return;
   let cls="",txt;
@@ -636,7 +607,7 @@ function setSync(){
 function showNotice(){
   const n=$("#notice");
   if(S.storeErr) n.innerHTML=`<div class="notice err"><span>${esc(S.storeErr)}</span><span class="actions"><button class="btn" data-export>Jetzt exportieren</button><button class="btn ghost" data-storeretry>Erneut speichern</button></span></div>`;
-  else if(!GH.ready()) n.innerHTML=`<div class="notice"><span>Die Bibliothek ist noch nicht mit GitHub verbunden und wird nur in diesem Browser gespeichert.</span><button class="btn" data-settings>GitHub verbinden</button></div>`;
+  else if(!GH.ready()) n.innerHTML=`<div class="notice"><span>Der GitHub-Sync ist auf diesem Gerät noch nicht eingerichtet. Die Bibliothek wird nur in diesem Browser gespeichert.</span><a class="btn" href="/startseite/#sync">Sync einrichten</a></div>`;
   else if(S.syncState==="err") n.innerHTML=`<div class="notice"><span>${esc(S.syncErr)}</span><span class="actions"><button class="btn" data-retry>Erneut versuchen</button><button class="btn ghost" data-settings>Einstellungen</button></span></div>`;
   else n.innerHTML="";
 }
@@ -2228,18 +2199,9 @@ function openSettings(){
   $("#layer").innerHTML=`<div class="scrim"></div><div class="modal" data-modalbg><form class="sheet" id="sf" novalidate>
     <div class="sheet-head"><h2>Einstellungen</h2><button type="button" class="btn ghost" data-close aria-label="Schließen">✕</button></div>
     <div class="sheet-body">
-      <h3>GitHub-Speicher</h3>
-      <p class="hint" style="margin:0">Die Bibliothek liegt als JSON-Datei in einem GitHub-Repo, am besten einem privaten. Token und Schlüssel bleiben nur in diesem Browser.</p>
-      <div class="row">
-        <div class="f"><label for="s-owner">Besitzer</label><input type="text" id="s-owner" value="${esc(c.owner)}" placeholder="dein-github-name" autocomplete="off" spellcheck="false"></div>
-        <div class="f"><label for="s-repo">Daten-Repo</label><input type="text" id="s-repo" value="${esc(c.repo)}" placeholder="videothek-daten" autocomplete="off" spellcheck="false"></div>
-      </div>
-      <div class="row">
-        <div class="f"><label for="s-branch">Branch</label><input type="text" id="s-branch" value="${esc(c.branch)}" spellcheck="false"></div>
-        <div class="f"><label for="s-path">Datei</label><input type="text" id="s-path" value="${esc(c.path)}" spellcheck="false"></div>
-      </div>
-      <div class="f"><label for="s-token">GitHub-Token</label><input type="password" id="s-token" value="${esc(c.token)}" placeholder="github_pat_…" autocomplete="off" spellcheck="false">
-        <span class="hint">Fine-grained Token mit Zugriff nur auf das Daten-Repo und der Berechtigung „Contents: Read and write“.</span></div>
+      <h3>Auf allen Geräten</h3>
+      <p class="hint" style="margin:0">Die Bibliothek wird über den gemeinsamen GitHub-Sync deiner Tools mit deinem privaten Daten-Repo abgeglichen (Ordner <code>videothek/</code>). Repo und Token trägst du einmal pro Gerät auf der Startseite ein. Der YouTube-Schlüssel bleibt nur in diesem Browser.</p>
+      <div class="actions"><a class="btn" href="/startseite/#sync">Sync-Einstellungen öffnen</a></div>
       <hr class="sep">
       <h3>YouTube-API-Schlüssel <span class="hint" style="font-family:var(--f-body)">optional</span></h3>
       <div class="f"><label for="s-yt">API-Schlüssel</label><input type="password" id="s-yt" value="${esc(c.ytKey)}" placeholder="AIza…" autocomplete="off" spellcheck="false">
@@ -2258,23 +2220,12 @@ function openSettings(){
       </div>
       <span class="hint" id="s-msg"></span>
     </div>
-    <div class="sheet-foot"><span class="hint err" id="s-err"></span><div class="actions"><button type="button" class="btn ghost" data-close>Abbrechen</button><button class="btn primary" type="submit">Speichern & verbinden</button></div></div>
+    <div class="sheet-foot"><span class="hint err" id="s-err"></span><div class="actions"><button type="button" class="btn ghost" data-close>Abbrechen</button><button class="btn primary" type="submit">Speichern</button></div></div>
   </form></div>`;
   $("#sf").addEventListener("submit",async e=>{ e.preventDefault();
-    const old=repoKey();
-    S.cfg={owner:$("#s-owner").value.trim(),repo:$("#s-repo").value.trim(),branch:$("#s-branch").value.trim()||"main",
-      path:$("#s-path").value.trim().replace(/^\/+/,"")||"library.json",token:$("#s-token").value.trim(),ytKey:$("#s-yt").value.trim()};
+    S.cfg={...S.cfg,ytKey:$("#s-yt").value.trim()};
     try{ await Store.set("config",S.cfg); }catch(e){ $("#s-err").textContent=(isQuota(e)?"Der Browser-Speicher ist voll. ":"")+"Einstellungen konnten nicht gespeichert werden: "+(e?.message||e); storeFail(e,"Die Einstellungen"); return; }
-    const any=S.cfg.owner||S.cfg.repo||S.cfg.token;
-    if(any&&!GH.ready()){ $("#s-err").textContent="Für GitHub brauchst du Besitzer, Repo und Token."; return; }
-    if(GH.ready()){
-      const btn=$("#sf button[type=submit]"); btn.disabled=true; btn.textContent="Verbinde …";
-      if(old!==repoKey()){ S.sha=null; S.dirty=S.videos.size>0; } // lokale Daten ins neue Repo übernehmen
-      await pull({quiet:false});
-      if(S.syncState==="err"){ btn.disabled=false; btn.textContent="Speichern & verbinden"; $("#s-err").textContent=S.syncErr; return; }
-      if(S.dirty||!S.sha) { S.dirty=true; await push(); }
-    }
-    setSync(); showNotice(); closeLayer(); render(); toast(GH.ready()?"Mit GitHub verbunden":"Einstellungen gespeichert");
+    setSync(); showNotice(); closeLayer(); render(); toast("Einstellungen gespeichert");
   });
   $("#s-export").addEventListener("click",exportJSON);
   storageInfoHTML().then(h=>{ const el=$("#s-storage"); if(el) el.textContent=h; });
@@ -2382,7 +2333,7 @@ document.addEventListener("click",e=>{
   if(d.piload!==undefined){ piLoad(); return; }
   if(d.pisel){ PI.sel=new Set(d.pisel==="all"?PI.pl.ids.filter(id=>!S.videos.has(id)):[]); piList(); piCount(); return; }
   if(d.settings!==undefined){ openSettings(); return; }
-  if(d.retry!==undefined){ S.dirty?push():pull(); return; }
+  if(d.retry!==undefined){ if(SYNC) SYNC.syncNow(); return; }
   if(d.export!==undefined){ exportJSON(); return; }
   if(d.storeretry!==undefined){ flushCache(); return; }
   if(d.open){ openDrawer(d.open); return; }
@@ -2429,7 +2380,7 @@ document.addEventListener("change",e=>{
 });
 $("#listsBtn").addEventListener("click",()=>openLists());
 $("#settingsBtn").addEventListener("click",openSettings);
-$("#sync").addEventListener("click",()=>{ if(S.syncState==="err") (S.dirty?push():pull()); else openSettings(); });
+$("#sync").addEventListener("click",()=>{ if(S.syncState==="err"&&SYNC) SYNC.syncNow(); else openSettings(); });
 $("#filterToggle").addEventListener("click",()=>$("#rail").classList.toggle("open"));
 $("#q").addEventListener("input",e=>{ S.q=e.target.value.trim(); if(S.view==="series"){ renderSeriesActive(); renderSeriesGrid(); } else if(S.view==="feed"){ renderFeedActive(); renderFeedGrid(); } else { renderActive(); renderGrid(); } });
 $("#sort").value=S.sort;
@@ -2447,8 +2398,6 @@ document.addEventListener("paste",e=>{ // YouTube-URL irgendwo einfügen → dir
   if(items.length>1||(items.length===1&&items[0].p)){ e.preventDefault(); openBulk(txt); }
   else if(items.length===1){ e.preventDefault(); openEditor(null,txt); } });
 new MutationObserver(()=>document.body.classList.toggle("has-drawer",!!$("#layer .drawer"))).observe($("#layer"),{childList:true});
-document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible"&&GH.ready()&&!pushing&&!S.dirty) pull({quiet:true}); });
-window.addEventListener("beforeunload",e=>{ if(S.dirty&&GH.ready()){ push(); e.preventDefault(); e.returnValue=""; } });
 // Link mit ?add=URL (z. B. per Lesezeichen) öffnet direkt das Formular
 const addParam=new URLSearchParams(location.search).get("add");
 
@@ -2474,11 +2423,10 @@ const addParam=new URLSearchParams(location.search).get("add");
   requestPersist();
   listenForYtImport();
   const feedAuto=()=>{ if(S.view==="feed"&&S.cfg.ytKey&&S.channels.size&&Date.now()-F.fetchedAt>30*6e4) refreshFeed(); };
-  if(GH.ready()) pull({quiet:!!cache}).then(()=>{ if(S.dirty) push(); feedAuto(); }); else feedAuto();
+  initSync();
+  feedAuto();
   if(addParam&&parseId(addParam)){ history.replaceState(null,"",location.pathname); openEditor(null,addParam); }
 })();
 </script>
-<!-- Zurück zur Startseite (gemeinsam für alle Tools) -->
-<script src="/startseite/nav-v1.js" defer></script>
 </body>
 </html>

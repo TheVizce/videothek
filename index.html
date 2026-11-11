@@ -60,15 +60,10 @@ a{color:inherit}
 .btn.ghost:hover{background:var(--sunk)}
 .btn.danger{color:var(--warn)}
 .btn:disabled{opacity:.5;cursor:default}
-.sync{display:inline-flex;align-items:center;gap:6px;border:0;background:none;color:var(--muted);font-size:12px;padding:6px 8px;border-radius:var(--r)}
-.sync:hover{background:var(--sunk)}
-.sync i{width:8px;height:8px;border-radius:50%;background:var(--muted)}
-.sync.ok i{background:var(--ok)} .sync.busy i{background:var(--accent);animation:pulse 1s infinite} .sync.err i{background:var(--warn)} .sync.err{color:var(--warn)}
-@keyframes pulse{50%{opacity:.3}}
 .only-narrow{display:none}
 
 .main{display:grid;grid-template-columns:clamp(220px,14vw,290px) minmax(0,1fr);gap:clamp(24px,2vw,40px);max-width:2400px;margin:0 auto;
-  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px}
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 88px} /* unten Platz für das ☁︎-Feld des Syncs */
 .rail{display:flex;flex-direction:column;gap:20px;align-self:start;position:sticky;top:calc(env(safe-area-inset-top,0px) + 80px);max-height:calc(100vh - 100px);overflow:auto;padding-right:4px}
 .facet h3{font-family:var(--f-mono);font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 6px;display:flex;justify-content:space-between}
 .facet h3 button{border:0;background:none;color:var(--accent);font:inherit;padding:0;text-transform:none;letter-spacing:0}
@@ -125,7 +120,7 @@ button.chip:hover{border-color:var(--muted)}
   border-left:1px solid var(--line);padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);padding-right:env(safe-area-inset-right,0px)}
 .drawer-head{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--line)}
 .drawer-head h2{font-family:var(--f-display);font-size:15px;margin:0;color:var(--muted);font-weight:600}
-.drawer-body{overflow:auto;padding:18px 20px 32px;display:flex;flex-direction:column;gap:18px}
+.drawer-body{overflow:auto;padding:18px 20px 72px;display:flex;flex-direction:column;gap:18px}
 .player{position:relative;aspect-ratio:16/9;width:100%;border-radius:var(--r);overflow:hidden;background:#000}
 .player iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
 .player .cover{border-radius:0;height:100%}
@@ -149,7 +144,7 @@ button.mini:hover{border-color:var(--muted)}
 .confirm{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--bg);padding:10px 12px;border-radius:var(--r)}
 
 .modal{position:fixed;z-index:22;inset:0;display:flex;align-items:flex-start;justify-content:center;overflow:auto;
-  padding-left:max(12px,env(safe-area-inset-left,0px));padding-right:max(12px,env(safe-area-inset-right,0px));padding-block:calc(env(safe-area-inset-top,0px) + 32px) 32px}
+  padding-left:max(12px,env(safe-area-inset-left,0px));padding-right:max(12px,env(safe-area-inset-right,0px));padding-block:calc(env(safe-area-inset-top,0px) + 32px) 72px}
 .sheet{background:var(--surface);border-radius:10px;width:min(680px,100%);box-shadow:0 20px 60px -20px rgba(0,0,0,.5);display:flex;flex-direction:column}
 .sheet-head{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--line)}
 .sheet-head h2{font-family:var(--f-display);font-size:19px;margin:0}
@@ -310,7 +305,6 @@ html{--dw:min(560px,100%)}
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
       <input id="q" type="search" placeholder="Titel, Creator, Tag, Notiz …" autocomplete="off">
     </div>
-    <button class="sync" id="sync" title="Speicherstatus und Einstellungen"><i></i><span>…</span></button>
     <button class="btn only-narrow" id="filterToggle">Filter</button>
     <button class="btn ghost" id="listsBtn" title="Listen und Einordnungshilfe für Genre, Format und mehr">Listen</button>
     <button class="btn ghost" id="settingsBtn">Einstellungen</button>
@@ -437,29 +431,32 @@ const lsSet=(k,v)=>{ try{ localStorage.setItem("videothek:"+k,JSON.stringify(v))
 // Daten (Bibliothek, Abo-Feed, Zugangsdaten) liegen in der IndexedDB „videothek-tool“.
 // Nur kleine UI-Einstellungen bleiben im localStorage, alle mit dem Präfix „videothek:“.
 const DB_NAME="videothek-tool", DB_STORE="kv", UI="videothek:";
-const OLD_KEYS={library:"vt-cache",config:"vt-config",feed:"vt-feed"};
+// Alte Speicherorte im localStorage: vor 10/2026 (vt-*) und der frühere Notfallweg ohne IndexedDB (videothek:data:*)
+const OLD_KEYS=[["library","vt-cache"],["config","vt-config"],["feed","vt-feed"],["library","videothek:data:library"],["config","videothek:data:config"],["feed","videothek:data:feed"]];
 const OLD_UI={"vt-view":"view","vt-sort":"sort","vt-inclrx":"inclrx","vt-feedseen":"feedseen"};
 const Store={
-  db:null, mode:"idb", ready:false, initErr:null,
+  db:null, mode:"idb", ready:false, initErr:null, mem:new Map(),
   async init(){
     try{
-      if(!("indexedDB" in window)) throw new Error("IndexedDB wird von diesem Browser nicht unterstützt.");
+      if(!window.indexedDB) throw new Error("IndexedDB ist nicht verfügbar");
       this.db=await new Promise((res,rej)=>{
         const r=indexedDB.open(DB_NAME,1);
         r.onupgradeneeded=()=>{ if(!r.result.objectStoreNames.contains(DB_STORE)) r.result.createObjectStore(DB_STORE); };
         r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); r.onblocked=()=>rej(new Error("Die Datenbank ist in einem anderen Tab blockiert. Schließe andere Tabs der Videothek."));
       });
       this.db.onversionchange=()=>{ this.db.close(); };
-    }catch(e){ this.mode="ls"; this.initErr=e; }
+    }catch(e){ this.mode="mem"; this.initErr=e; } // ohne IndexedDB: nur Arbeitsspeicher, nie den gemeinsamen localStorage füllen
     this.ready=true;
   },
   tx(mode){ return this.db.transaction(DB_STORE,mode).objectStore(DB_STORE); },
   get(k){
-    if(this.mode==="ls"){ try{ const v=localStorage.getItem(UI+"data:"+k); return Promise.resolve(v?JSON.parse(v):undefined); }catch(e){ return Promise.reject(e); } }
+    if(this.mode==="mem"){ if(this.mem.has(k)) return Promise.resolve(this.mem.get(k));
+      // alte Daten aus dem früheren Notfallweg nur lesen, nicht löschen
+      try{ const v=localStorage.getItem(UI+"data:"+k)||localStorage.getItem(OLD_KEYS.find(([n,o])=>n===k&&o.startsWith("vt-"))[1]); return Promise.resolve(v?JSON.parse(v):undefined); }catch(e){ return Promise.resolve(undefined); } }
     return new Promise((res,rej)=>{ const r=this.tx("readonly").get(k); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); });
   },
   set(k,v){
-    if(this.mode==="ls"){ try{ localStorage.setItem(UI+"data:"+k,JSON.stringify(v)); return Promise.resolve(); }catch(e){ return Promise.reject(e); } }
+    if(this.mode==="mem"){ this.mem.set(k,JSON.parse(JSON.stringify(v))); return Promise.resolve(); }
     return new Promise((res,rej)=>{ const t=this.db.transaction(DB_STORE,"readwrite"); t.objectStore(DB_STORE).put(v,k);
       t.oncomplete=()=>res(); t.onerror=()=>rej(t.error); t.onabort=()=>rej(t.error||new Error("Speichern abgebrochen")); });
   }
@@ -483,7 +480,7 @@ async function migrateFromLocalStorage(){
   for(const [o,n] of Object.entries(OLD_UI)){ try{ const v=localStorage.getItem(o); if(v===null) continue; if(localStorage.getItem(UI+n)===null) localStorage.setItem(UI+n,v); localStorage.removeItem(o); }catch(e){} }
   if(Store.mode!=="idb") return {moved:[]};
   const moved=[];
-  for(const [key,old] of Object.entries(OLD_KEYS)){
+  for(const [key,old] of OLD_KEYS){
     let raw=null; try{ raw=localStorage.getItem(old); }catch(e){ continue; }
     if(raw===null) continue;
     let val; try{ val=JSON.parse(raw); }catch(e){ console.warn("Videothek: alter Eintrag nicht lesbar, bleibt erhalten:",old); continue; }
@@ -508,7 +505,7 @@ async function storageInfoHTML(){
   let est=null; try{ est=await navigator.storage?.estimate?.(); }catch(e){}
   let persisted; try{ persisted=await navigator.storage?.persisted?.(); }catch(e){}
   const mb=b=>(b/1048576).toFixed(b<1048576?2:1).replace(".",",")+" MB";
-  return [Store.mode==="idb"?`Gespeichert in der Browser-Datenbank „${DB_NAME}“.`:`IndexedDB ist nicht verfügbar (${esc(Store.initErr?.message||"")}). Die Daten liegen ersatzweise im begrenzten localStorage.`,
+  return [Store.mode==="idb"?`Gespeichert in der Browser-Datenbank „${DB_NAME}“.`:`IndexedDB ist nicht verfügbar (${Store.initErr?.message||"unbekannt"}). Änderungen liegen nur im Arbeitsspeicher und gehen beim Schließen verloren, wenn sie nicht über den Sync oder einen Export gesichert sind.`,
     est?.usage!=null?`Belegt: ${mb(est.usage)}${est.quota?` von verfügbar ${mb(est.quota)}`:""}.`:"",
     persisted===true?"Dauerhafter Speicher ist gewährt: Der Browser löscht die Daten nicht automatisch.":persisted===false?"Dauerhafter Speicher wurde nicht gewährt: Bei Platzmangel könnte der Browser die lokalen Daten löschen. Halte deshalb GitHub verbunden oder exportiere regelmäßig.":""].filter(Boolean).join(" ");
 }
@@ -519,8 +516,6 @@ function exportJSON(){
 }
 
 
-function b64ToUtf8(b64){ const bin=atob(b64.replace(/\s/g,"")); const bytes=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i); return new TextDecoder().decode(bytes); }
-function utf8ToB64(str){ const bytes=new TextEncoder().encode(str); let bin=""; for(let i=0;i<bytes.length;i+=0x8000) bin+=String.fromCharCode.apply(null,bytes.subarray(i,i+0x8000)); return btoa(bin); }
 
 /* GitHub-Sync: gemeinsamer Sync aller Tools (/startseite/sync-v1.js), privates Repo tool-daten, Ordner videothek/.
    Repo und Token werden einmal pro Gerät auf der Startseite eingetragen. Bis 02.11.2026 lag die Bibliothek
@@ -528,7 +523,9 @@ function utf8ToB64(str){ const bytes=new TextEncoder().encode(str); let bin=""; 
 let SYNC=null;
 const GH = { ready(){ return !!(SYNC&&SYNC.configured); } };
 function initSync(){
-  if(S.cfg.token||S.cfg.owner||S.cfg.repo){ S.cfg={...S.cfg,owner:"",repo:"",token:""}; Store.set("config",S.cfg).catch(e=>storeFail(e,"Die Einstellungen")); } // alten Token nicht weiter aufbewahren
+  // Reste des alten eigenen GitHub-Syncs (bis 02.11.2026) aus der Konfiguration entfernen, v. a. den alten Token
+  const OLD_CFG=["owner","repo","branch","path","token"];
+  if(OLD_CFG.some(k=>k in S.cfg)){ for(const k of OLD_CFG) delete S.cfg[k]; Store.set("config",S.cfg).catch(e=>storeFail(e,"Die Einstellungen")); }
   if(!window.ToolSync) return;
   SYNC=ToolSync.create({
     tool:"videothek",
@@ -540,22 +537,15 @@ function initSync(){
     get:()=>({videos:[...S.videos.values()],series:[...S.series.values()],channels:[...S.channels.values()],feedHidden:S.feedHidden,lists:S.lists,listsUpdatedAt:S.listsUpdatedAt||0}),
     apply:async d=>{ applyData(d); S.loaded=true; const ok=await flushCache(); render(); return ok; },
     onStatus:(st,txt)=>{
-      S.syncState=st==="ok"?"ok":(st==="error"||st==="offline")?"err":"busy"; S.syncErr=txt||"";
-      if(st==="ok"){ S.dirty=false; S.deleted.clear(); S.deletedSeries.clear(); S.deletedChannels.clear(); S.unhidden.clear(); cacheLocal(); }
-      setSync(); showNotice();
+      S.syncState=st==="ok"?"ok":st==="error"?"err":"busy"; S.syncErr=txt||""; // offline: das ☁︎-Feld zeigt es, kein eigener Hinweis
+      if(st==="ok"){ S.dirty=false; cacheLocal(); }
+      showNotice();
     }
   });
   SYNC.start();
 }
-function ghErr(status,what){
-  const m={401:"Das GitHub-Token ist ungültig oder abgelaufen. Trag in den Einstellungen ein neues ein.",
-    403:"GitHub verweigert den Zugriff. Prüf, ob das Token für dieses Repo die Berechtigung „Contents: Read and write“ hat.",
-    404:what==="repo"?"Repo nicht gefunden. Prüf Besitzer und Repo-Name, und ob das Token Zugriff auf dieses Repo hat.":"Datei oder Branch nicht gefunden. Prüf den Branch-Namen in den Einstellungen."}[status];
-  return {status,msg:m||`GitHub hat mit Fehler ${status} geantwortet. Versuch es gleich noch einmal.`};
-}
 
-function snapshotData(){ return {version:1,updatedAt:Date.now(),listsUpdatedAt:S.listsUpdatedAt||0,lists:S.lists,videos:[...S.videos.values()].sort((a,b)=>(a.addedAt||0)-(b.addedAt||0)),series:[...S.series.values()].sort((a,b)=>(a.addedAt||0)-(b.addedAt||0)),channels:[...S.channels.values()].sort((a,b)=>(a.addedAt||0)-(b.addedAt||0)),feedHidden:pruneHidden(S.feedHidden)}; }
-function pruneHidden(h){ const lim=Date.now()-120*864e5; const o={}; for(const [k,t] of Object.entries(h||{})) if(t>lim) o[k]=t; return o; }
+function snapshotData(){ return {version:1,updatedAt:Date.now(),listsUpdatedAt:S.listsUpdatedAt||0,lists:S.lists,videos:[...S.videos.values()].sort((a,b)=>(a.addedAt||0)-(b.addedAt||0)),series:[...S.series.values()].sort((a,b)=>(a.addedAt||0)-(b.addedAt||0)),channels:[...S.channels.values()].sort((a,b)=>(a.addedAt||0)-(b.addedAt||0)),feedHidden:S.feedHidden}; }
 function applyData(d){
   S.videos=new Map((d?.videos||[]).filter(v=>v&&v.id).map(v=>[v.id,v]));
   S.series=new Map((d?.series||[]).filter(x=>x&&x.id).map(x=>[x.id,x]));
@@ -564,59 +554,31 @@ function applyData(d){
   if(d?.lists) S.lists={genres:d.lists.genres||[],formats:d.lists.formats||[],moods:d.lists.moods||[],moodLabel:d.lists.moodLabel||"",desc:d.lists.desc||{}};
   S.listsUpdatedAt=d?.listsUpdatedAt||0;
 }
-function mergeRemote(d){
-  const out=new Map();
-  for(const v of d?.videos||[]) if(v&&v.id&&!S.deleted.has(v.id)) out.set(v.id,v);
-  for(const v of S.videos.values()){ const r=out.get(v.id); if(!r||(v.updatedAt||0)>=(r.updatedAt||0)) out.set(v.id,v); }
-  S.videos=out;
-  const so=new Map();
-  for(const x of d?.series||[]) if(x&&x.id&&!S.deletedSeries.has(x.id)) so.set(x.id,x);
-  for(const x of S.series.values()){ const r=so.get(x.id); if(!r||(x.updatedAt||0)>=(r.updatedAt||0)) so.set(x.id,x); }
-  S.series=so;
-  const co=new Map();
-  for(const x of d?.channels||[]) if(x&&x.id&&!S.deletedChannels.has(x.id)) co.set(x.id,x);
-  for(const x of S.channels.values()){ const r=co.get(x.id); if(!r||(x.updatedAt||0)>=(r.updatedAt||0)) co.set(x.id,x); }
-  S.channels=co;
-  for(const [k,t] of Object.entries(d?.feedHidden||{})) if(!(k in S.feedHidden)&&!S.unhidden.has(k)) S.feedHidden[k]=t;
-  if(d?.lists&&(d.listsUpdatedAt||0)>(S.listsUpdatedAt||0)){ S.lists=d.lists; S.listsUpdatedAt=d.listsUpdatedAt; }
-}
 let cacheTimer=null;
 function cacheLocal(){ clearTimeout(cacheTimer); cacheTimer=setTimeout(flushCache,250); }
 async function flushCache(){
   clearTimeout(cacheTimer); cacheTimer=null;
   if(!S.storeLoaded) return false; // nie einen leeren Startzustand über echte Daten schreiben
-  try{ await Store.set("library",{data:snapshotData(),sha:S.sha,dirty:S.dirty,deleted:[...S.deleted],deletedSeries:[...S.deletedSeries],deletedChannels:[...S.deletedChannels],unhidden:[...S.unhidden],repoKey:repoKey()});
+  try{ await Store.set("library",{data:snapshotData(),dirty:S.dirty});
     if(S.storeErr){ S.storeErr=""; showNotice(); } return true; }
   catch(e){ storeFail(e); return false; }
 }
-const repoKey=()=>`${S.cfg.owner}/${S.cfg.repo}@${S.cfg.branch}:${S.cfg.path}`;
 
-function persist(){ S.dirty=true; cacheLocal(); setSync(); if(SYNC) SYNC.changed(); }
+function persist(){ S.dirty=true; cacheLocal(); if(SYNC) SYNC.changed(); }
 function push(){ return SYNC?SYNC.syncNow():Promise.resolve(); }
 function pull(){ return SYNC?SYNC.syncNow():Promise.resolve(); }
-function setSync(){
-  const b=$("#sync"); if(!b) return;
-  let cls="",txt;
-  if(!GH.ready()){ txt="Nur lokal"; }
-  else if(S.syncState==="busy"||(S.dirty&&S.syncState!=="err")){ cls="busy"; txt="Speichert …"; }
-  else if(S.syncState==="err"){ cls="err"; txt="Nicht synchron"; }
-  else { cls="ok"; txt="Synchron"; }
-  b.className="sync "+cls; b.querySelector("span").textContent=txt;
-  b.title=S.syncErr||"Speicherstatus und Einstellungen";
-}
 function showNotice(){
   const n=$("#notice");
   if(S.storeErr) n.innerHTML=`<div class="notice err"><span>${esc(S.storeErr)}</span><span class="actions"><button class="btn" data-export>Jetzt exportieren</button><button class="btn ghost" data-storeretry>Erneut speichern</button></span></div>`;
-  else if(!GH.ready()) n.innerHTML=`<div class="notice"><span>Der GitHub-Sync ist auf diesem Gerät noch nicht eingerichtet. Die Bibliothek wird nur in diesem Browser gespeichert.</span><a class="btn" href="/startseite/#sync">Sync einrichten</a></div>`;
-  else if(S.syncState==="err") n.innerHTML=`<div class="notice"><span>${esc(S.syncErr)}</span><span class="actions"><button class="btn" data-retry>Erneut versuchen</button><button class="btn ghost" data-settings>Einstellungen</button></span></div>`;
+  else if(GH.ready()&&S.syncState==="err") n.innerHTML=`<div class="notice"><span>${esc(S.syncErr)}</span><span class="actions"><button class="btn" data-retry>Erneut versuchen</button><a class="btn ghost" href="/startseite/#sync">Sync-Einstellungen</a></span></div>`;
   else n.innerHTML="";
 }
 
 /* ================= Zustand & Helfer ================= */
 const S = {
-  videos:new Map(), series:new Map(), deletedSeries:new Set(), channels:new Map(), deletedChannels:new Set(), feedHidden:{}, unhidden:new Set(), view:lsGet("view","videos"), lists:structuredClone(DEFAULT_LISTS), listsUpdatedAt:0, loaded:false,
-  cfg:{owner:"",repo:"",branch:"main",path:"library.json",token:"",ytKey:""}, storeLoaded:false, storeErr:"",
-  sha:null, dirty:false, deleted:new Set(), syncState:"", syncErr:"",
+  videos:new Map(), series:new Map(), channels:new Map(), feedHidden:{}, view:lsGet("view","videos"), lists:structuredClone(DEFAULT_LISTS), listsUpdatedAt:0, loaded:false,
+  cfg:{ytKey:""}, storeLoaded:false, storeErr:"",
+  dirty:false, syncState:"", syncErr:"",
   f:{genre:new Set(),format:new Set(),mood:new Set(),creator:new Set(),tags:new Set(),status:new Set(),series:new Set(),watched:"all",rx:"all",todo:"",inclRx:lsGet("inclrx",false)},
   sf:{kind:new Set(),progress:"all"}, openSeries:null, q:"", sort:lsGet("sort","added"), creatorQ:"", openId:null, playing:false
 };
@@ -1100,13 +1062,12 @@ function saveSeries(){
   const now=Date.now(), needMeta=[];
   add.forEach((id,i)=>{
     const cur=S.videos.get(id);
-    if(!cur){ const m=ES.pl?.meta?.has(id)?ES.pl.meta.get(id):undefined; S.videos.set(id,newVideo(id,m,def,add.length-i)); S.deleted.delete(id); if(m===undefined) needMeta.push(id); }
+    if(!cur){ const m=ES.pl?.meta?.has(id)?ES.pl.meta.get(id):undefined; S.videos.set(id,newVideo(id,m,def,add.length-i)); if(m===undefined) needMeta.push(id); }
     else if(applyOld) S.videos.set(id,applyDefaults(cur,def));
   });
   const id=ES.id||("s"+now.toString(36)+Math.random().toString(36).slice(2,6));
   S.series.set(id,{...(prev||{}),id,name,kind:$("#se-kind").value,description:$("#se-desc").value.trim(),playlistId:pid||"",
     videoIds:[...order,...add],defaults:def,addedAt:prev?.addedAt||now,updatedAt:now});
-  S.deletedSeries.delete(id);
   persist(); S.view="series"; lsSet("view","series"); closeLayer(); render(); openSeriesDrawer(id);
   toast(add.length?`${add.length} ${add.length===1?"Video":"Videos"} hinzugefügt`:(ES.isNew?"Reihe angelegt":"Gespeichert"));
   if(needMeta.length) enrichStubs(needMeta);
@@ -1243,12 +1204,12 @@ function feedAdd(id,{edit}={}){
   if(!S.videos.has(id)){
     const c=S.channels.get(it.channelId)||{};
     const v=newVideo(id,{title:it.title,creator:it.channelTitle,channelId:it.channelId,uploadDate:(it.published||"").slice(0,10),duration:it.duration||null,status:"Verfügbar"},{genre:c.genre,format:c.format,tags:c.tags||[]});
-    S.videos.set(id,v); S.deleted.delete(id); persist();
+    S.videos.set(id,v); persist();
   }
   if(edit) openEditor(id); else { render(); toast("Als ungesehen in die Videothek übernommen"); }
 }
 function feedHide(id){
-  if(S.feedHidden[id]){ delete S.feedHidden[id]; S.unhidden.add(id); } else { S.feedHidden[id]=Date.now(); S.unhidden.delete(id); }
+  if(S.feedHidden[id]) delete S.feedHidden[id]; else S.feedHidden[id]=Date.now();
   persist(); render();
 }
 function openFeedDrawer(id,play){ S.openId=null; S.openSeries=null; S.openFeed=id; S.playing=!!play; $("#layer").innerHTML=""; renderFeedDrawer(); }
@@ -1291,7 +1252,7 @@ function toggleFav(id){ const c=S.channels.get(id); if(!c) return; S.channels.se
 function addChannel(c){
   const now=Date.now(); const ex=S.channels.get(c.id);
   S.channels.set(c.id,ex?{...ex,title:c.title||ex.title,updatedAt:now}:{id:c.id,title:c.title,handle:c.handle||"",include:"",exclude:"",hideShorts:false,genre:"",format:"",tags:[],addedAt:now,updatedAt:now});
-  S.deletedChannels.delete(c.id); return !ex;
+  return !ex;
 }
 function parseTakeoutCsv(text){
   const out=[]; const seen=new Set();
@@ -1467,7 +1428,7 @@ function piImport(){
   const watched=$("#pi-watched").checked;
   const ids=pl.ids.filter(id=>PI.sel.has(id)&&!S.videos.has(id));
   const needMeta=[];
-  ids.forEach((id,i)=>{ const m=pl.meta.get(id); const v=newVideo(id,m&&!m.gone?m:undefined,def,ids.length-i); if(watched) v.watched=true; S.videos.set(id,v); S.deleted.delete(id); if(!m||!m.title) needMeta.push(id); });
+  ids.forEach((id,i)=>{ const m=pl.meta.get(id); const v=newVideo(id,m&&!m.gone?m:undefined,def,ids.length-i); if(watched) v.watched=true; S.videos.set(id,v); if(!m||!m.title) needMeta.push(id); });
   let sid=null;
   if(asSeries){ const now=Date.now(); sid="s"+now.toString(36)+Math.random().toString(36).slice(2,6);
     S.series.set(sid,{id:sid,name:sname,kind:pl.pid?"Playlist":"Serie",description:(pl.description||"").slice(0,1500),playlistId:pl.pid||"",
@@ -1785,7 +1746,7 @@ function cbImport(){
     tags:[...new Set($("#cb-tags").value.split(",").map(t=>t.trim().toLowerCase().replace(/\s+/g," ")).filter(Boolean))]};
   const watched=$("#cb-watched").checked;
   ids.forEach((x,i)=>{ const v=newVideo(x.id,{title:x.title,creator:CB.ch.title,channelId:CB.ch.id,uploadDate:(x.published||"").slice(0,10),duration:x.duration||null,status:"Verfügbar"},def,i);
-    if(watched) v.watched=true; S.videos.set(x.id,v); S.deleted.delete(x.id); });
+    if(watched) v.watched=true; S.videos.set(x.id,v); });
   let sid=null;
   if(asSeries){ const now=Date.now(); sid="s"+now.toString(36)+Math.random().toString(36).slice(2,6);
     const order=ids.map(x=>x.id);
@@ -1903,7 +1864,7 @@ function rsApply(){
   const watched=$("#rs-watched").checked;
   const newOnes=RS.yt.filter(x=>RS.sel.has(x.id)&&!S.videos.has(x.id)).sort((a,b)=>Date.parse(a.published)-Date.parse(b.published));
   newOnes.forEach((x,i)=>{ const v=newVideo(x.id,{title:x.title,creator:x.channelTitle,channelId:x.channelId,uploadDate:(x.published||"").slice(0,10),duration:x.duration||null,status:"Verfügbar"},def,i);
-    v.reactsTo=[oid]; if(watched) v.watched=true; S.videos.set(x.id,v); S.deleted.delete(x.id); added++; });
+    v.reactsTo=[oid]; if(watched) v.watched=true; S.videos.set(x.id,v); added++; });
   for(const id of RS.sel){ const v=S.videos.get(id); if(!v||newOnes.some(x=>x.id===id)||(v.reactsTo||[]).includes(oid)) continue;
     const p={reactsTo:[...(v.reactsTo||[]),oid],updatedAt:now};
     if(!v.genre&&RS.orig.genre) p.genre=RS.orig.genre;
@@ -2173,7 +2134,7 @@ async function save(){
     reactsTo:E.reactsTo.filter(x=>x!==id), extOrig:E.ext?.on?{note:(E.ext.note||"").trim(),url:(E.ext.url||"").trim()}:null, channelId:E.channelId||prev.channelId||"", addedAt:prev.addedAt||now, updatedAt:now };
   const newStubs=[...E.stubs.values()].filter(s=>E.reactsTo.includes(s.id)&&!S.videos.has(s.id));
   for(const s of newStubs) S.videos.set(s.id,{...s,updatedAt:now});
-  S.videos.set(id,data); S.deleted.delete(id);
+  S.videos.set(id,data);
   persist(); closeLayer(); render(); toast(E.isNew?"Hinzugefügt":"Gespeichert"); openDrawer(id);
   if(newStubs.length) enrichStubs(newStubs.map(s=>s.id));
 }
@@ -2186,7 +2147,7 @@ async function enrichStubs(ids){ // Originale im Hintergrund mit Titel/Creator f
 }
 function updateVideo(id,patch){ const v=S.videos.get(id); if(!v) return; S.videos.set(id,{...v,...patch,updatedAt:Date.now()}); persist(); render(); }
 function removeVideo(id){
-  S.videos.delete(id); S.deleted.add(id);
+  S.videos.delete(id);
   for(const x of [...S.series.values()]) if(x.videoIds.includes(id)) S.series.set(x.id,{...x,videoIds:x.videoIds.filter(i=>i!==id),updatedAt:Date.now()});
   for(const v of [...S.videos.values()]) if((v.reactsTo||[]).includes(id)) S.videos.set(v.id,{...v,reactsTo:v.reactsTo.filter(x=>x!==id),updatedAt:Date.now()});
   persist(); render();
@@ -2225,7 +2186,7 @@ function openSettings(){
   $("#sf").addEventListener("submit",async e=>{ e.preventDefault();
     S.cfg={...S.cfg,ytKey:$("#s-yt").value.trim()};
     try{ await Store.set("config",S.cfg); }catch(e){ $("#s-err").textContent=(isQuota(e)?"Der Browser-Speicher ist voll. ":"")+"Einstellungen konnten nicht gespeichert werden: "+(e?.message||e); storeFail(e,"Die Einstellungen"); return; }
-    setSync(); showNotice(); closeLayer(); render(); toast("Einstellungen gespeichert");
+    showNotice(); closeLayer(); render(); toast("Einstellungen gespeichert");
   });
   $("#s-export").addEventListener("click",exportJSON);
   storageInfoHTML().then(h=>{ const el=$("#s-storage"); if(el) el.textContent=h; });
@@ -2302,7 +2263,7 @@ document.addEventListener("click",e=>{
   if(d.channels!==undefined){ openChannels(); return; }
   if(d.chrules){ openChannels(d.chrules); return; }
   if(d.cmadd!==undefined){ cmAdd(); return; }
-  if(d.chdel){ const c=S.channels.get(d.chdel); S.channels.delete(d.chdel); S.deletedChannels.add(d.chdel); F.ch.delete(d.chdel); persist(); renderChannelList(); toast(`„${c?.title||"Kanal"}“ entfernt`); return; }
+  if(d.chdel){ const c=S.channels.get(d.chdel); S.channels.delete(d.chdel); F.ch.delete(d.chdel); persist(); renderChannelList(); toast(`„${c?.title||"Kanal"}“ entfernt`); return; }
   if(d.chfollow){ const v=S.videos.get(S.openId); addChannel({id:d.chfollow,title:v?.creator||d.chfollow}); persist(); F.fetchedAt=0; render(); toast("Kanal in die Abos aufgenommen"); return; }
   if(d.add!==undefined){ openEditor(); return; }
   if(d.view){ setView(d.view); return; }
@@ -2319,7 +2280,7 @@ document.addEventListener("click",e=>{
   if(d.syncpl!==undefined){ syncPlaylist(S.openSeries); return; }
   if(d.sdel!==undefined){ S.confirmSDel=true; renderSeriesDrawer(); return; }
   if(d.sdelNo!==undefined){ S.confirmSDel=false; renderSeriesDrawer(); return; }
-  if(d.sdelYes!==undefined){ const id=S.openSeries; closeLayer(); S.series.delete(id); S.deletedSeries.add(id); S.f.series.delete(id); persist(); render(); toast("Reihe gelöscht, Videos bleiben erhalten"); return; }
+  if(d.sdelYes!==undefined){ const id=S.openSeries; closeLayer(); S.series.delete(id); S.f.series.delete(id); persist(); render(); toast("Reihe gelöscht, Videos bleiben erhalten"); return; }
   if(d.sedpick){ ES.pick.push(d.sedpick); ES.q=""; renderSedList(); $("#se-q").value=""; renderSedRes(); return; }
   if(d.sedrm){ ES.pick=ES.pick.filter(x=>x!==d.sedrm); renderSedList(); return; }
   if(d.loadpl!==undefined){ loadPlaylistInEditor(); return; }
@@ -2380,7 +2341,6 @@ document.addEventListener("change",e=>{
 });
 $("#listsBtn").addEventListener("click",()=>openLists());
 $("#settingsBtn").addEventListener("click",openSettings);
-$("#sync").addEventListener("click",()=>{ if(S.syncState==="err"&&SYNC) SYNC.syncNow(); else openSettings(); });
 $("#filterToggle").addEventListener("click",()=>$("#rail").classList.toggle("open"));
 $("#q").addEventListener("input",e=>{ S.q=e.target.value.trim(); if(S.view==="series"){ renderSeriesActive(); renderSeriesGrid(); } else if(S.view==="feed"){ renderFeedActive(); renderFeedGrid(); } else { renderActive(); renderGrid(); } });
 $("#sort").value=S.sort;
@@ -2412,14 +2372,11 @@ const addParam=new URLSearchParams(location.search).get("add");
   try{ Object.assign(S.cfg,(await Store.get("config"))||{}); cache=(await Store.get("library"))||null;
     const fc=await Store.get("feed"); if(fc){ F.items=fc.items||[]; F.fetchedAt=fc.fetchedAt||0; } }
   catch(e){ storeFail(e,"Das Laden aus dem Browser-Speicher"); }
-  if(Store.mode!=="idb"&&!S.storeErr){ S.storeErr=`IndexedDB ist in diesem Browser nicht verfügbar (${Store.initErr?.message||"unbekannt"}). Die Daten liegen ersatzweise im begrenzten localStorage.`; }
-  if(cache&&cache.data&&(!GH.ready()||cache.repoKey===repoKey()||!cache.repoKey)){
-    applyData(cache.data); S.sha=cache.sha||null; S.dirty=!!cache.dirty; S.deleted=new Set(cache.deleted||[]); S.deletedSeries=new Set(cache.deletedSeries||[]); S.deletedChannels=new Set(cache.deletedChannels||[]); S.unhidden=new Set(cache.unhidden||[]);
-    S.loaded=true;
-  }
-  if(!GH.ready()) S.loaded=true;
+  if(Store.mode!=="idb"&&!S.storeErr){ S.storeErr=`IndexedDB ist in diesem Browser nicht verfügbar (${Store.initErr?.message||"unbekannt"}), z. B. im privaten Modus. Änderungen bleiben nur bis zum Schließen erhalten, außer der Sync ist eingerichtet. Exportiere sonst vor dem Schließen.`; }
+  if(cache&&cache.data){ applyData(cache.data); S.dirty=!!cache.dirty; }
+  S.loaded=true;
   S.storeLoaded=true;
-  setSync(); showNotice(); render();
+  showNotice(); render();
   requestPersist();
   listenForYtImport();
   const feedAuto=()=>{ if(S.view==="feed"&&S.cfg.ytKey&&S.channels.size&&Date.now()-F.fetchedAt>30*6e4) refreshFeed(); };

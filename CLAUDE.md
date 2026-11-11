@@ -5,6 +5,9 @@
 - Sync: Ordner `videothek/` (16 Teildateien). `collections: videos, series, channels (array), feedHidden (geteilte Map)`, Felder `lists`, `listsUpdatedAt`.
 - `SYNC.changed()` steckt in `persist()`. Der YouTube-API-Schlüssel bleibt pro Gerät und wird nicht synchronisiert.
 - Inhaltliche Einordnungsregeln: `EINORDNUNG.md`.
+- `feedHidden` nie automatisch ausdünnen: Jeder entfernte Eintrag zählt im Sync als Löschung (Löschvermerke, ggf. Massenlösch-Dialog).
+- Ohne IndexedDB arbeitet das Tool nur im Arbeitsspeicher (mit Hinweis), nie ersatzweise im gemeinsamen localStorage.
+- Sync-Status zeigt nur das ☁︎-Feld; ein eigener Hinweis oben erscheint nur bei Sync-Fehlern.
 
 ## Gemeinsame Regeln für alle Tools unter thevizce.github.io
 

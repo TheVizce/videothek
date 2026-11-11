@@ -13,7 +13,7 @@ Persönliche Bibliothek für YouTube-Videos. Eine einzige Datei (`index.html`), 
 Die Seite selbst enthält keine Daten. Wer die Adresse kennt, sieht nur eine leere Bibliothek.
 
 ### 2. Sync einrichten
-Auf der Startseite (`/startseite/`) unter „GitHub-Sync“ das private Daten-Repo und den Token eintragen – einmal pro Gerät. Die Videothek gleicht danach automatisch ab. Beim ersten Abgleich eines weiteren Geräts wird der Cloud-Stand übernommen (außer das Gerät hat noch nicht hochgeladene Änderungen, dann wird zusammengeführt).
+Auf der Startseite (`/startseite/`) unter „GitHub-Sync“ das private Daten-Repo und den Token eintragen – einmal pro Gerät. Die Videothek gleicht danach automatisch ab. Den Stand zeigt das ☁︎-Feld unten links (mit ⌂ zur Startseite); nur bei Sync-Fehlern erscheint zusätzlich oben ein Hinweis. Beim ersten Abgleich eines weiteren Geräts wird der Cloud-Stand übernommen (außer das Gerät hat noch nicht hochgeladene Änderungen, dann wird zusammengeführt).
 
 Bis 02.11.2026 lag die Bibliothek im eigenen Repo `videothek-daten` (`library.json`) mit eigenem Token; dieses Repo wird nicht mehr benutzt.
 
@@ -70,15 +70,16 @@ Neue Abos später einfach einzeln hinzufügen (Kanal-URL, @Handle oder ein Video
 
 **Kontingent:** Eine Aktualisierung kostet etwa 1 Einheit pro Kanal (3 bei Kanälen mit „Nur Videos mit“-Regel) plus 1 pro 50 Videos. Bei 100 Kanälen sind das rund 130 von 10.000 Einheiten am Tag.
 - **Einstellungen → Fehlende Daten & Verfügbarkeit prüfen:** ergänzt leere Felder und markiert gelöschte oder private Videos.
-- **Export/Import** als JSON für zusätzliche Backups. Jede Änderung ist außerdem ein Commit im Daten-Repo und lässt sich dort zurückverfolgen.
+- **Export/Import** als JSON für zusätzliche Backups. Mit Sync ist jede Änderung außerdem ein Commit im Daten-Repo und lässt sich dort zurückverfolgen.
 
 ## Sicherheit
-Token und API-Schlüssel werden nur in deinem Browser (IndexedDB „videothek-tool“) gespeichert und nur an GitHub bzw. Google gesendet. Trag sie nicht auf fremden oder geteilten Geräten ein. Das Token kann nur das Daten-Repo lesen und schreiben, sonst nichts.
+Der GitHub-Token liegt nur auf der Startseite (`localStorage["toolsync.config"]`), nicht in der Videothek. Der YouTube-API-Schlüssel liegt nur in deinem Browser (IndexedDB „videothek-tool“) und wird nur an Google gesendet. Trag beides nicht auf fremden oder geteilten Geräten ein.
 
 ## Speicher im Browser
-- **IndexedDB `videothek-tool`** (ein Objektspeicher `kv`): `library` (lokale Kopie der Bibliothek und noch nicht synchronisierte Änderungen), `feed` (Zwischenspeicher der Abos), `config` (Repo, Token, API-Schlüssel). IndexedDB hat ein eigenes, viel größeres Kontingent und belastet die anderen Tools auf derselben Domain nicht.
+- **IndexedDB `videothek-tool`** (ein Objektspeicher `kv`): `library` (lokale Kopie der Bibliothek und noch nicht synchronisierte Änderungen), `feed` (Zwischenspeicher der Abos), `config` (YouTube-API-Schlüssel). IndexedDB hat ein eigenes, viel größeres Kontingent und belastet die anderen Tools auf derselben Domain nicht.
 - **localStorage** nur für kleine UI-Einstellungen, alle mit Präfix `videothek:` (`view`, `sort`, `inclrx`, `feedseen`, zusammen unter 1 KB). Das Tool ruft nie `localStorage.clear()` auf und fasst keine fremden Schlüssel an.
-- Beim ersten Start übernimmt die Videothek die alten Einträge `vt-cache`, `vt-config` und `vt-feed` in die Datenbank, prüft sie und entfernt sie erst dann aus dem localStorage. Die alten UI-Schlüssel `vt-*` ziehen nach `videothek:*` um.
+- Ist IndexedDB nicht verfügbar (z. B. in manchen privaten Fenstern), arbeitet die Videothek nur im Arbeitsspeicher und zeigt das oben an. Gesichert wird dann über den Sync oder einen Export – nie über den gemeinsamen localStorage.
+- Beim ersten Start übernimmt die Videothek alte Einträge (`vt-cache`, `vt-config`, `vt-feed` und den früheren Notfallweg `videothek:data:*`) in die Datenbank, prüft sie und entfernt sie erst dann aus dem localStorage. Die alten UI-Schlüssel `vt-*` ziehen nach `videothek:*` um.
 - Scheitert das Speichern (z. B. Speicher voll), erscheint oben ein roter Hinweis mit „Jetzt exportieren“ und „Erneut speichern“.
 - Die Videothek bittet den Browser um **dauerhaften Speicher**. Ob er gewährt wurde und wie viel belegt ist, steht unter Einstellungen → Bibliothek pflegen.
-- **Backup:** Einstellungen → „Als JSON exportieren“ / „JSON importieren“ (Token und Schlüssel sind bewusst nicht enthalten). Mit GitHub-Verbindung ist zusätzlich jede Änderung ein Commit im Daten-Repo.
+- **Backup:** Einstellungen → „Als JSON exportieren“ / „JSON importieren“ (Token und Schlüssel sind bewusst nicht enthalten). Mit eingerichtetem Sync ist zusätzlich jede Änderung ein Commit im Daten-Repo `tool-daten`; der Sync legt außerdem vor dem ersten Abgleich und vor Massenlöschungen eine Sicherheitskopie an.

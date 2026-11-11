@@ -8,6 +8,9 @@
 - `feedHidden` nie automatisch ausdünnen: Jeder entfernte Eintrag zählt im Sync als Löschung (Löschvermerke, ggf. Massenlösch-Dialog).
 - Ohne IndexedDB arbeitet das Tool nur im Arbeitsspeicher (mit Hinweis), nie ersatzweise im gemeinsamen localStorage.
 - Sync-Status zeigt nur das ☁︎-Feld; ein eigener Hinweis oben erscheint nur bei Sync-Fehlern.
+- Reaction-Format: `lists.rxFormat` (Name des Formats, `""` = keines; fehlt es, gilt der Name mit „Reaction/Reaktion“). Immer über `isRxFormat()`/`rxFormatName()` prüfen, nie am Namen.
+- Neue Videos gesammelt anlegen nur über den Import-Baustein (`importFormHTML`/`readImportForm`/`importVideos`/`finishImport`), nicht neu nachbauen.
+- Creator-Filter gruppiert nach `creatorKey()` (Kanal-ID, sonst Name); Anzeigename über `creatorName()`.
 
 ## Gemeinsame Regeln für alle Tools unter thevizce.github.io
 

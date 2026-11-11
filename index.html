@@ -242,6 +242,7 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:4px 0}
 .rstag.warn{border-color:var(--warn);color:var(--warn)}
 @media (max-width:600px){.rsrow{grid-template-columns:auto 72px minmax(0,1fr)}}
 .bmlink{cursor:grab;border-style:dashed;font-weight:600}
+.rxpick{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--muted);white-space:nowrap;cursor:pointer}
 .optrow{display:flex;align-items:center;gap:2px}
 .optrow .opt{flex:1;min-width:0}
 .star{border:0;background:none;padding:3px 6px;border-radius:4px;color:var(--muted);font-size:15px;line-height:1}
@@ -344,6 +345,7 @@ const STATUSES = ["Verfügbar","Nicht mehr verfügbar","Privat"];
 /* ================= Empfohlene Einteilung & Einordnungshilfe ================= */
 const RECOMMENDED = {
   moodLabel:"Anspruch",
+  rxFormat:"Reaction",
   genres:["Politik & Gesellschaft","Wirtschaft & Geld","Kultur & Medien","Tech & Digitales","Wissenschaft & Geschichte","Sport","Gaming","Comedy & Spaß","Alltag & Lifestyle","Sonstiges"],
   formats:["Video-Essay","Doku & Reportage","Erklärvideo","Kommentar & Review","Reaction","Gespräch & Podcast","Highlights & Clips","Show & Sketch","Vlog & Stream","Tutorial"],
   moods:["Nebenbei","Zurücklehnen","Konzentriert"],
@@ -409,7 +411,9 @@ const moodLabel=()=>S.lists.moodLabel||"Stimmung";
 const LIST_KEYS=[["genres","genre","Genre"],["formats","format","Format"],["moods","mood",null]];
 function descOf(listKey,val){ return S.lists.desc?.[listKey]?.[val]||""; }
 const firstLine=t=>(t||"").split("\n")[0];
-const isRxFormat=f=>/reaction|reaktion/i.test(f||"");
+// Welches Format als Reaction gilt, steht in lists.rxFormat ("" = keines). Ältere Listen ohne Angabe: Name enthält „Reaction“/„Reaktion“.
+const rxFormatName=()=>typeof S.lists.rxFormat==="string"?S.lists.rxFormat:(S.lists.formats.find(x=>/reaction|reaktion/i.test(x))||"");
+const isRxFormat=f=>!!f&&f===rxFormatName();
 const isReaction=v=>isRxFormat(v.format)||(v.reactsTo||[]).length>0||!!v.extOrig;
 function fmtGuideText(t){
   return esc(t).split("\n").map((line,i)=>{
@@ -419,7 +423,7 @@ function fmtGuideText(t){
   }).join("");
 }
 
-const DEFAULT_LISTS={genres:[...RECOMMENDED.genres],formats:[...RECOMMENDED.formats],moods:[...RECOMMENDED.moods],moodLabel:RECOMMENDED.moodLabel,desc:structuredClone(RECOMMENDED.desc)};
+const DEFAULT_LISTS={genres:[...RECOMMENDED.genres],formats:[...RECOMMENDED.formats],moods:[...RECOMMENDED.moods],moodLabel:RECOMMENDED.moodLabel,rxFormat:RECOMMENDED.rxFormat,desc:structuredClone(RECOMMENDED.desc)};
 
 
 
@@ -551,7 +555,7 @@ function applyData(d){
   S.series=new Map((d?.series||[]).filter(x=>x&&x.id).map(x=>[x.id,x]));
   S.channels=new Map((d?.channels||[]).filter(x=>x&&x.id).map(x=>[x.id,x]));
   S.feedHidden={...(d?.feedHidden||{})};
-  if(d?.lists) S.lists={genres:d.lists.genres||[],formats:d.lists.formats||[],moods:d.lists.moods||[],moodLabel:d.lists.moodLabel||"",desc:d.lists.desc||{}};
+  if(d?.lists) S.lists={genres:d.lists.genres||[],formats:d.lists.formats||[],moods:d.lists.moods||[],moodLabel:d.lists.moodLabel||"",desc:d.lists.desc||{},...(typeof d.lists.rxFormat==="string"?{rxFormat:d.lists.rxFormat}:{})};
   S.listsUpdatedAt=d?.listsUpdatedAt||0;
 }
 let cacheTimer=null;
@@ -622,7 +626,19 @@ function coverHTML(v,{badges=true}={}){
 }
 function reactionsTo(id){ const out=[]; for(const v of S.videos.values()) if((v.reactsTo||[]).includes(id)) out.push(v); return out; }
 function allTags(){ const m=new Map(); for(const v of S.videos.values()) for(const t of v.tags||[]) m.set(t,(m.get(t)||0)+1); return [...m].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])); }
-function allCreators(){ const m=new Map(); for(const v of S.videos.values()) if(v.creator) m.set(v.creator,(m.get(v.creator)||0)+1); return [...m].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])); }
+/* Creator werden nach Kanal-ID gruppiert (Umbenennungen spalten nicht), ohne ID über einen Namen, zu dem ein anderes Video die ID kennt. */
+let CI={nameToId:new Map(),names:new Map()};
+function buildCreatorIndex(){
+  const nameToId=new Map(), latest=new Map();
+  for(const v of S.videos.values()) if(v.channelId&&v.creator) nameToId.set(v.creator,v.channelId);
+  CI={nameToId,names:new Map()};
+  for(const v of S.videos.values()){ const k=creatorKey(v); if(!k||!v.creator) continue; const t=v.updatedAt||v.addedAt||0; const cur=latest.get(k); if(!cur||t>=cur.t) latest.set(k,{t,name:v.creator}); }
+  for(const [k,{name}] of latest) CI.names.set(k,S.channels.get(k)?.title||name);
+}
+function creatorKey(v){ return v.channelId||CI.nameToId.get(v.creator)||(v.creator?"n:"+v.creator:""); }
+const creatorName=k=>CI.names.get(k)||S.channels.get(k)?.title||(k.startsWith("n:")?k.slice(2):k);
+function allCreators(){ const m=new Map(); for(const v of S.videos.values()){ const k=creatorKey(v); if(k) m.set(k,(m.get(k)||0)+1); } return [...m].sort((a,b)=>b[1]-a[1]||creatorName(a[0]).localeCompare(creatorName(b[0]),"de")); }
+function creatorNames(){ return [...new Set([...S.videos.values()].map(v=>v.creator).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"de")); }
 
 function originsOf(v){ return (v.reactsTo||[]).map(id=>S.videos.get(id)).filter(Boolean); }
 function effGenres(v){ const g=new Set(v.genre?[v.genre]:[]); if(S.f.inclRx) for(const o of originsOf(v)) if(o.genre) g.add(o.genre); return [...g]; }
@@ -632,7 +648,7 @@ function matches(v,skip){
   if(skip!=="genre"&&f.genre.size&&!effGenres(v).some(g=>f.genre.has(g))) return false;
   if(skip!=="format"&&f.format.size&&!f.format.has(v.format)) return false;
   if(skip!=="mood"&&f.mood.size&&!f.mood.has(v.mood)) return false;
-  if(skip!=="creator"&&f.creator.size&&!f.creator.has(v.creator)) return false;
+  if(skip!=="creator"&&f.creator.size&&!f.creator.has(creatorKey(v))) return false;
   if(skip!=="status"&&f.status.size&&!f.status.has(v.status||"Verfügbar")) return false;
   if(skip!=="series"&&f.series.size&&!(SI.get(v.id)||[]).some(p=>f.series.has(p.s.id))) return false;
   if(skip!=="tags"&&f.tags.size){ const et=effTags(v); for(const t of f.tags) if(!et.includes(t)) return false; }
@@ -705,10 +721,10 @@ function optsBlock(title,items,cur,attr){ // einfache Auswahl mit Zählern
 function renderRail(){
   const r=$("#rail"); if(!S.videos.size){ r.innerHTML=`<p class="hint">Filter erscheinen, sobald Videos in der Bibliothek sind.</p>`; return; }
   const gC=facetCounts("genre",effGenres), fC=facetCounts("format",v=>v.format), mC=facetCounts("mood",v=>v.mood),
-        sC=facetCounts("status",v=>v.status||"Verfügbar"), cC=facetCounts("creator",v=>v.creator);
+        sC=facetCounts("status",v=>v.status||"Verfügbar"), cC=facetCounts("creator",creatorKey);
   const withExtra=(list,counts)=>[...new Set([...list,...counts.keys()])].filter(x=>list.includes(x)||counts.get(x));
   let creators=allCreators().map(c=>c[0]);
-  if(S.creatorQ) creators=creators.filter(c=>c.toLowerCase().includes(S.creatorQ.toLowerCase()));
+  if(S.creatorQ) creators=creators.filter(c=>creatorName(c).toLowerCase().includes(S.creatorQ.toLowerCase()));
   const showC=[...new Set([...S.f.creator,...creators.slice(0,10)])];
   const tagCounts=new Map(); for(const v of S.videos.values()) if(matches(v,"tags")) for(const t of effTags(v)) tagCounts.set(t,(tagCounts.get(t)||0)+1);
   const tagList=[...new Set([...S.f.tags,...allTags().map(t=>t[0]).filter(t=>tagCounts.get(t))])].slice(0,30);
@@ -724,7 +740,7 @@ function renderRail(){
       return optsBlock("Reactions",[["all","Alle Videos"],["missing","Ohne Original",c.missing],["linked","Mit YouTube-Original",c.linked],["external","Original nicht auf YouTube",c.external]],S.f.rx,"data-rxf"); })()}
     <div class="facet"><h3>Creator${S.f.creator.size?`<button data-clear="creator">zurücksetzen</button>`:""}</h3>
       ${allCreators().length>8?`<input class="small-in" id="creatorQ" placeholder="Creator suchen" value="${esc(S.creatorQ)}">`:""}
-      <div class="opts">${showC.map(c=>`<button class="opt ${S.f.creator.has(c)?"on":""}" data-f="creator" data-v="${esc(c)}"><span>${esc(c)}</span><span class="n">${cC.get(c)||0}</span></button>`).join("")||'<span class="hint">Keine Treffer</span>'}</div></div>
+      <div class="opts">${showC.map(c=>`<button class="opt ${S.f.creator.has(c)?"on":""}" data-f="creator" data-v="${esc(c)}"><span>${esc(creatorName(c))}</span><span class="n">${cC.get(c)||0}</span></button>`).join("")||'<span class="hint">Keine Treffer</span>'}</div></div>
     ${tagList.length?`<div class="facet"><h3>Tags${S.f.tags.size?`<button data-clear="tags">zurücksetzen</button>`:""}</h3><div class="tagcloud">
       ${tagList.map(t=>`<button class="chip ${S.f.tags.has(t)?"on":""}" data-f="tags" data-v="${esc(t)}">${esc(t)} <span class="mono" style="opacity:.6">${tagCounts.get(t)||0}</span></button>`).join("")}
     </div></div>`:""}
@@ -740,7 +756,7 @@ function renderRail(){
 }
 function renderActive(){
   const chips=[];
-  for(const k of ["genre","format","creator","tags","mood","status"]) for(const v of S.f[k]) chips.push(`<span class="chip">${esc(v)}<button data-rm="${k}" data-v="${esc(v)}" aria-label="Filter entfernen">✕</button></span>`);
+  for(const k of ["genre","format","creator","tags","mood","status"]) for(const v of S.f[k]) chips.push(`<span class="chip">${esc(k==="creator"?creatorName(v):v)}<button data-rm="${k}" data-v="${esc(v)}" aria-label="Filter entfernen">✕</button></span>`);
   if(S.f.watched!=="all") chips.push(`<span class="chip">${S.f.watched==="yes"?"Gesehen":"Ungesehen"}<button data-rmw aria-label="Filter entfernen">✕</button></span>`);
   const n=[...S.videos.values()].filter(v=>matches(v)).length;
   if(S.f.rx!=="all") chips.push(`<span class="chip">${{missing:"Reactions ohne Original",linked:"Reactions mit Original",external:"Original nicht auf YouTube"}[S.f.rx]}<button data-rxf="all" aria-label="Filter entfernen">✕</button></span>`);
@@ -822,7 +838,7 @@ function drawerRest(v,originals,reacts,row){
 const KINDS=["Serie","Playlist","Sammlung"];
 const plur=(n,one,many)=>`${n} ${n===1?one:many}`;
 let SI=new Map(); // Video-ID → [{s: Reihe, i: Position}]
-function buildIndex(){ SI=new Map(); for(const x of S.series.values()) x.videoIds.forEach((id,i)=>{ if(!SI.has(id)) SI.set(id,[]); SI.get(id).push({s:x,i}); }); }
+function buildIndex(){ buildCreatorIndex(); SI=new Map(); for(const x of S.series.values()) x.videoIds.forEach((id,i)=>{ if(!SI.has(id)) SI.set(id,[]); SI.get(id).push({s:x,i}); }); }
 function parsePlaylistId(input){
   if(/^(PL|UU|OL|FL|LL|WL|RD)[\w-]{0,}$/.test((input||"").trim())&&(input.trim().length>=10||/^(WL|LL)$/.test(input.trim()))) return input.trim();
   try{ const u=new URL(/^https?:/i.test(input.trim())?input.trim():"https://"+input.trim()); const l=u.searchParams.get("list"); return l&&/^[\w-]{10,}$/.test(l)?l:null; }
@@ -923,7 +939,8 @@ function renderSeriesDrawer(){
         <div class="prog big"><i style="width:${st.pct}%"></i></div></div>
       <div class="actions">
         ${st.next?`<button class="btn primary" data-continue="${st.next.id}">▶ ${st.done?"Weiterschauen":"Anfangen"}${numbered?`: Teil ${x.videoIds.indexOf(st.next.id)+1}`:""}</button>`:""}
-        <button class="btn" data-editseries="${x.id}">Bearbeiten & Videos hinzufügen</button>
+        <button class="btn" data-bulkto="${x.id}">Videos hinzufügen</button>
+        <button class="btn" data-editseries="${x.id}">Bearbeiten</button>
         ${x.playlistId?`<button class="btn" data-syncpl>Mit Playlist abgleichen</button><a class="btn ghost" href="${plUrl(x.playlistId)}" target="_blank" rel="noopener">Playlist ↗</a>`:""}
       </div>
       ${x.description?`<p class="desc">${esc(x.description)}</p>`:""}
@@ -979,47 +996,44 @@ async function syncPlaylist(sid){
 
 /* ---------- Reihen-Editor ---------- */
 let ES=null;
-function openSeriesEditor(id,{pick=[],playlist=""}={}){
+function openSeriesEditor(id,{pick=[]}={}){
   const x=id?S.series.get(id):null; const def=x?.defaults||{};
-  ES={id:x?.id||null,isNew:!x,pick:[...pick],q:"",pl:null};
+  ES={id:x?.id||null,isNew:!x,pick:[...pick],q:""};
   S.openId=null; S.openSeries=null; S.playing=false;
   const opt=(list,val)=>`<option value="">–</option>${[...new Set([...list,...(val&&!list.includes(val)?[val]:[])])].map(v=>`<option ${v===val?"selected":""}>${esc(v)}</option>`).join("")}`;
   $("#layer").innerHTML=`<div class="scrim"></div>
   <div class="modal" data-modalbg><form class="sheet" id="sed" novalidate>
     <div class="sheet-head"><h2>${x?"Reihe bearbeiten":"Neue Reihe"}</h2><button type="button" class="btn ghost" data-close aria-label="Schließen">✕</button></div>
     <div class="sheet-body">
-      <div class="plbox"><div class="f"><label for="se-pl">YouTube-Playlist ${x?.playlistId?"(verknüpft)":"(optional)"}</label>
-        <div class="urlrow"><input type="url" id="se-pl" placeholder="https://www.youtube.com/playlist?list=…" value="${esc(playlist||(x?.playlistId?plUrl(x.playlistId):""))}"><button type="button" class="btn" data-loadpl>Playlist laden</button></div>
-        <span class="hint" id="se-plmsg">${S.cfg.ytKey?"Lädt alle Videos der Playlist in der richtigen Reihenfolge, inklusive Titel, Dauer und Upload.":"Zum Laden ganzer Playlists brauchst du den YouTube-API-Schlüssel (Einstellungen). Ohne Schlüssel kannst du die Video-URLs unten einfügen."}</span></div></div>
       <div class="row">
         <div class="f" style="grid-column:span 2"><label for="se-name">Name</label><input type="text" id="se-name" value="${esc(x?.name)}" placeholder="z. B. Geschichte des Internets"></div>
         <div class="f"><label for="se-kind">Art</label><select id="se-kind">${KINDS.map(k=>`<option ${k===(x?.kind||"Serie")?"selected":""}>${k}</option>`).join("")}</select></div>
       </div>
       <div class="f"><label for="se-desc">Beschreibung</label><textarea id="se-desc" style="min-height:70px" placeholder="Worum geht es, warum willst du es schauen …">${esc(x?.description)}</textarea></div>
-      <div class="f"><label for="se-urls">Videos per URL hinzufügen</label><textarea id="se-urls" style="min-height:80px" class="mono" placeholder="Eine YouTube-URL pro Zeile, in der gewünschten Reihenfolge"></textarea><span class="hint" id="se-urlmsg"></span></div>
+      <div class="f"><label for="se-pl">Verknüpfte YouTube-Playlist <span class="hint" style="text-transform:none;letter-spacing:0">optional</span></label>
+        <input type="url" id="se-pl" placeholder="https://www.youtube.com/playlist?list=…" value="${esc(x?.playlistId?plUrl(x.playlistId):"")}">
+        <span class="hint">Für „Mit Playlist abgleichen“: neue Folgen kommen mit den Standardwerten unten in die Reihe.${x?"":" Trägst du hier eine Playlist ein, gleicht die Reihe nach dem Anlegen einmal ab."} Einzelne Videos fügst du in der Reihe über „Videos hinzufügen“ hinzu.</span></div>
       <div class="f"><label for="se-q">Aus deiner Bibliothek hinzufügen</label>
         <input type="text" id="se-q" placeholder="Titel, Creator oder Tag suchen" autocomplete="off">
         <div class="rxres" id="se-res"></div><div class="linklist" id="se-pick"></div></div>
       <hr class="sep">
       <h3>Standardwerte für neue Videos</h3>
-      <p class="hint" style="margin:0">Gelten für Videos, die über diese Reihe neu in die Bibliothek kommen.</p>
+      <p class="hint" style="margin:0">Gelten für Videos, die über diese Reihe neu in die Bibliothek kommen (Playlist-Abgleich, „Videos hinzufügen“).</p>
       <div class="row">
         <div class="f"><label for="se-genre">Genre</label><select id="se-genre">${opt(S.lists.genres,def.genre)}</select></div>
         <div class="f"><label for="se-format">Format</label><select id="se-format">${opt(S.lists.formats,def.format)}</select></div>
         <div class="f"><label for="se-mood">${esc(moodLabel())}</label><select id="se-mood">${opt(S.lists.moods,def.mood)}</select></div>
       </div>
       <div class="f"><label for="se-tags">Tags</label><input type="text" id="se-tags" list="dl-alltags" value="${esc((def.tags||[]).join(", "))}" placeholder="mit Komma trennen"><datalist id="dl-alltags">${allTags().map(t=>`<option value="${esc(t[0])}">`).join("")}</datalist></div>
-      <label class="check"><input type="checkbox" id="se-applyold"> Auch bei hinzugefügten Videos, die schon in der Bibliothek sind, leere Felder füllen und Tags ergänzen</label>
+      <label class="check"><input type="checkbox" id="se-applyold"> Auch bei den oben aus der Bibliothek hinzugefügten Videos leere Felder füllen und Tags ergänzen</label>
     </div>
     <div class="sheet-foot"><span class="hint err" id="se-err"></span><div class="actions"><button type="button" class="btn ghost" data-close>Abbrechen</button><button type="submit" class="btn primary">${x?"Speichern":"Reihe anlegen"}</button></div></div>
   </form></div>`;
-  $("#se-urls").addEventListener("input",()=>{ const r=parseUrlList($("#se-urls").value); $("#se-urlmsg").className=r.bad?"hint err":"hint"; $("#se-urlmsg").textContent=r.ids.length||r.bad?`${plur(r.ids.length,"Video","Videos")} erkannt${r.bad?`, ${plur(r.bad,"Zeile","Zeilen")} ohne gültige Video-URL`:""}`:""; });
   $("#se-q").addEventListener("input",e=>{ ES.q=e.target.value; renderSedRes(); });
   $("#sed").addEventListener("submit",e=>{ e.preventDefault(); saveSeries(); });
   renderSedList();
-  if(playlist) loadPlaylistInEditor(); else $("#se-name").focus();
+  $("#se-name").focus();
 }
-function parseUrlList(text){ const ids=[]; let bad=0; for(const line of text.split(/[\n\s]+/).map(l=>l.trim()).filter(Boolean)){ const id=parseId(line); if(id){ if(!ids.includes(id)) ids.push(id); } else bad++; } return {ids,bad}; }
 function renderSedList(){
   const box=$("#se-pick"); if(!box) return;
   box.innerHTML=ES.pick.map(id=>{ const v=S.videos.get(id); return v?`<div class="rxsel">${miniHTML(v,"data-noop")}<button type="button" class="btn ghost" data-sedrm="${id}" aria-label="Wieder entfernen">✕</button></div>`:""; }).join("");
@@ -1031,21 +1045,6 @@ function renderSedRes(){
   const res=[...S.videos.values()].filter(v=>!inSeries.has(v.id)&&!ES.pick.includes(v.id)&&words.every(w=>[v.title,v.creator,...(v.tags||[])].join(" ").toLowerCase().includes(w))).slice(0,8);
   box.innerHTML=res.length?res.map(v=>miniHTML(v,"data-sedpick")).join(""):`<span class="hint">Nichts gefunden.</span>`;
 }
-async function loadPlaylistInEditor(){
-  const msg=$("#se-plmsg"), btn=$("[data-loadpl]"); const pid=parsePlaylistId($("#se-pl").value);
-  if(!pid){ msg.className="hint err"; msg.textContent="Das ist keine Playlist-URL. Sie enthält normalerweise „list=“."; return; }
-  btn.disabled=true; btn.textContent="Lade …"; msg.className="hint";
-  try{ const pl=await fetchPlaylist(pid,n=>msg.textContent=`${n} Videos gefunden …`);
-    ES.pl={pid,...pl};
-    if(!$("#se-name").value) $("#se-name").value=pl.title;
-    if(!$("#se-desc").value&&pl.description) $("#se-desc").value=pl.description.slice(0,1500);
-    if(ES.isNew) $("#se-kind").value="Playlist";
-    const known=pl.ids.filter(id=>S.videos.has(id)).length, gone=[...pl.meta.values()].filter(m=>m?.gone).length;
-    const dur=[...pl.meta.values()].reduce((a,m)=>a+(m?.duration||0),0);
-    msg.className="hint ok"; msg.textContent=`„${pl.title}“ von ${pl.channel}: ${plur(pl.ids.length,"Video","Videos")}${dur?`, ${fmtLong(dur)}`:""}. ${known?`${known===1?"1 davon ist":known+" davon sind"} schon in deiner Bibliothek. `:""}${gone?`${gone===1?"1 ist":gone+" sind"} gelöscht oder privat. `:""}Beim Speichern werden alle übernommen.`;
-  }catch(e){ msg.className="hint err"; msg.textContent=e.msg||"Die Playlist konnte nicht geladen werden."; }
-  finally{ btn.disabled=false; btn.textContent="Playlist laden"; }
-}
 function saveSeries(){
   const err=$("#se-err"); const name=$("#se-name").value.trim();
   if(!name){ err.textContent="Gib der Reihe einen Namen."; $("#se-name").focus(); return; }
@@ -1056,21 +1055,18 @@ function saveSeries(){
   const applyOld=$("#se-applyold").checked;
   const prev=ES.id?S.series.get(ES.id):null; const order=[...(prev?.videoIds||[])];
   const add=[]; const push=id=>{ if(!order.includes(id)&&!add.includes(id)) add.push(id); };
-  if(ES.pl&&ES.pl.pid===pid) ES.pl.ids.forEach(push);
-  parseUrlList($("#se-urls").value).ids.forEach(push);
   ES.pick.forEach(push);
-  const now=Date.now(), needMeta=[];
-  add.forEach((id,i)=>{
+  const now=Date.now();
+  add.forEach(id=>{
     const cur=S.videos.get(id);
-    if(!cur){ const m=ES.pl?.meta?.has(id)?ES.pl.meta.get(id):undefined; S.videos.set(id,newVideo(id,m,def,add.length-i)); if(m===undefined) needMeta.push(id); }
-    else if(applyOld) S.videos.set(id,applyDefaults(cur,def));
+    if(cur&&applyOld) S.videos.set(id,applyDefaults(cur,def));
   });
   const id=ES.id||("s"+now.toString(36)+Math.random().toString(36).slice(2,6));
   S.series.set(id,{...(prev||{}),id,name,kind:$("#se-kind").value,description:$("#se-desc").value.trim(),playlistId:pid||"",
     videoIds:[...order,...add],defaults:def,addedAt:prev?.addedAt||now,updatedAt:now});
   persist(); S.view="series"; lsSet("view","series"); closeLayer(); render(); openSeriesDrawer(id);
-  toast(add.length?`${add.length} ${add.length===1?"Video":"Videos"} hinzugefügt`:(ES.isNew?"Reihe angelegt":"Gespeichert"));
-  if(needMeta.length) enrichStubs(needMeta);
+  toast(add.length?`${plur(add.length,"Video","Videos")} hinzugefügt`:(ES.isNew?"Reihe angelegt":"Gespeichert"));
+  if(pid&&pid!==(prev?.playlistId||"")){ if(S.cfg.ytKey) syncPlaylist(id); else setTimeout(()=>toast("Zum Abgleichen mit der Playlist brauchst du den YouTube-API-Schlüssel."),1800); }
 }
 
 /* ================= Abos ================= */
@@ -1336,13 +1332,75 @@ function onChannelField(el){
   clearTimeout(chTimer); chTimer=setTimeout(()=>persist(),600);
 }
 
+/* ---------- Gemeinsamer Import: Formular „Für die neuen Videos“ und Anlegen ----------
+   Genutzt von „Mehrere Videos hinzufügen“ (pi), „Videos eines Kanals“ (cb) und „Reactions suchen“ (rs). */
+const parseTagInput=s=>[...new Set((s||"").split(",").map(t=>t.trim().toLowerCase().replace(/\s+/g," ")).filter(Boolean))];
+function importFormHTML(p,{def={},series=true,seriesId="",seriesName=""}={}){
+  const opt=(lk,val)=>`<option value="">–</option>${[...new Set([...S.lists[lk],...(val&&!S.lists[lk].includes(val)?[val]:[])])].map(x=>`<option value="${esc(x)}" ${x===val?"selected":""}>${esc(x)}${S.lists[lk].includes(x)?"":" (alt)"}</option>`).join("")}`;
+  const ser=[...S.series.values()].sort((a,b)=>a.name.localeCompare(b.name,"de"));
+  return `<div class="impform" data-imp="${p}">
+    <div class="row">
+      <div class="f">${lblHelp(p+"-genre","Genre","genres")}<select id="${p}-genre" data-lk="genres">${opt("genres",def.genre)}</select><span class="hint ghint" id="${p}-genre-h"></span></div>
+      <div class="f">${lblHelp(p+"-format","Format","formats")}<select id="${p}-format" data-lk="formats">${opt("formats",def.format)}</select><span class="hint ghint" id="${p}-format-h"></span></div>
+      <div class="f">${lblHelp(p+"-mood",moodLabel(),"moods")}<select id="${p}-mood" data-lk="moods">${opt("moods",def.mood)}</select><span class="hint ghint" id="${p}-mood-h"></span></div>
+    </div>
+    <div class="f"><label for="${p}-tags">Tags</label><input type="text" id="${p}-tags" list="${p}-dltags" value="${esc((def.tags||[]).join(", "))}" placeholder="mit Komma trennen"><datalist id="${p}-dltags">${allTags().map(t=>`<option value="${esc(t[0])}">`).join("")}</datalist></div>
+    <label class="check"><input type="checkbox" id="${p}-watched"> Als gesehen markieren</label>
+    ${series?`<div class="row">
+      <div class="f"><label for="${p}-series">Reihe</label><select id="${p}-series" data-impseries="${p}"><option value="">Keine Reihe</option><option value="__new" ${seriesId==="__new"?"selected":""}>Neue Reihe …</option>${ser.map(x=>`<option value="${esc(x.id)}" ${x.id===seriesId?"selected":""}>${esc(x.name)}</option>`).join("")}</select></div>
+      <div class="f" id="${p}-sname-wrap" ${seriesId==="__new"?"":"hidden"}><label for="${p}-sname">Name der neuen Reihe</label><input type="text" id="${p}-sname" value="${esc(seriesName)}"></div>
+    </div>`:""}
+  </div>`;
+}
+function importFormInit(p){ document.querySelectorAll(`[data-imp="${p}"] select[data-lk]`).forEach(selHint); }
+function importFormFill(p,def){ // nur leere Felder füllen
+  for(const k of ["genre","format","mood"]){ const el=$(`#${p}-${k}`); if(el&&def?.[k]&&!el.value){ if(![...el.options].some(o=>o.value===def[k])) el.add(new Option(def[k]+" (alt)",def[k])); el.value=def[k]; selHint(el); } }
+  const t=$(`#${p}-tags`); if(t&&(def?.tags||[]).length) t.value=[...new Set([...parseTagInput(t.value),...def.tags])].join(", ");
+}
+function importSeriesChanged(p){
+  const sel=$(`#${p}-series`); if(!sel) return;
+  $(`#${p}-sname-wrap`).hidden=sel.value!=="__new";
+  const x=S.series.get(sel.value); if(x?.defaults) importFormFill(p,x.defaults);
+  if(sel.value==="__new") $(`#${p}-sname`).focus();
+}
+function readImportForm(p){
+  const def={genre:$(`#${p}-genre`).value,format:$(`#${p}-format`).value,mood:$(`#${p}-mood`).value,tags:parseTagInput($(`#${p}-tags`).value)};
+  const sel=$(`#${p}-series`); let series=null;
+  if(sel?.value==="__new"){ const name=$(`#${p}-sname`).value.trim(); if(!name) return {err:"Gib der neuen Reihe einen Namen.",focus:`#${p}-sname`}; series={name}; }
+  else if(sel?.value) series={id:sel.value};
+  return {def,watched:$(`#${p}-watched`).checked,series};
+}
+const importHasSeries=p=>!!$(`#${p}-series`)?.value;
+/* items: [{id, meta}] in Anzeige-Reihenfolge (das erste steht danach oben). meta wie bei newVideo; fehlt der Titel, wird nachgeladen.
+   seriesIds: welche Videos in welcher Reihenfolge in die Reihe kommen (nur vorhandene werden übernommen). */
+function importVideos(items,{def,watched,series,extra,seriesIds,seriesInfo={}}){
+  const n=items.length, need=[]; let added=0;
+  items.forEach((it,i)=>{ if(S.videos.has(it.id)) return;
+    const v=newVideo(it.id,it.meta,def,n-i); if(watched) v.watched=true; if(extra) extra(v);
+    S.videos.set(it.id,v); added++; if(!it.meta||(!it.meta.title&&!it.meta.gone)) need.push(it.id); });
+  let sid=null;
+  if(series){ const ids=(seriesIds||items.map(x=>x.id)).filter(id=>S.videos.has(id)); const now=Date.now();
+    if(series.id&&S.series.has(series.id)){ const x=S.series.get(series.id); sid=x.id; S.series.set(sid,{...x,videoIds:[...x.videoIds,...ids.filter(id=>!x.videoIds.includes(id))],updatedAt:now}); }
+    else { sid="s"+now.toString(36)+Math.random().toString(36).slice(2,6);
+      S.series.set(sid,{id:sid,name:series.name,kind:seriesInfo.kind||"Serie",description:(seriesInfo.description||"").slice(0,1500),playlistId:seriesInfo.playlistId||"",videoIds:ids,defaults:def,addedAt:now,updatedAt:now}); } }
+  return {added,sid,need};
+}
+function finishImport({added,sid,need},{msg,after}={}){
+  persist(); closeLayer();
+  if(after) after();
+  else if(sid){ S.view="series"; lsSet("view","series"); render(); openSeriesDrawer(sid); }
+  else { S.view="videos"; lsSet("view","videos"); S.sort="added"; $("#sort").value="added"; lsSet("sort","added"); render(); }
+  toast(msg||(added?`${plur(added,"Video","Videos")} hinzugefügt`:sid?"Reihe aktualisiert":"Nichts Neues hinzugefügt"));
+  if(need?.length) enrichStubs(need);
+}
+
 /* ---------- Mehrere Videos / Playlist hinzufügen ---------- */
 let PI=null;
-function openBulk(text=""){
+function openBulk(text="",{seriesId=""}={}){
   PI={pl:null,sel:new Set()}; S.openId=null; S.openSeries=null; S.openFeed=null;
-  const opt=list=>`<option value="">–</option>${list.map(x=>`<option>${esc(x)}</option>`).join("")}`;
+  const target=S.series.get(seriesId);
   $("#layer").innerHTML=`<div class="scrim"></div><div class="modal" data-modalbg><form class="sheet" id="pif" novalidate>
-    <div class="sheet-head"><h2>Mehrere Videos hinzufügen</h2><button type="button" class="btn ghost" data-close aria-label="Schließen">✕</button></div>
+    <div class="sheet-head"><h2>${target?`Videos zu „${esc(target.name)}“ hinzufügen`:"Mehrere Videos hinzufügen"}</h2><button type="button" class="btn ghost" data-close aria-label="Schließen">✕</button></div>
     <div class="sheet-body">
       <div class="f"><label for="pi-url">Video- oder Playlist-URLs</label>
         <textarea id="pi-url" class="mono" style="min-height:110px" placeholder="Eine URL pro Zeile. Playlists werden aufgelöst.">${esc(text)}</textarea>
@@ -1353,20 +1411,13 @@ function openBulk(text=""){
           <span class="actions" style="gap:4px"><button type="button" class="btn ghost" style="padding:2px 8px;font-size:12px" data-pisel="all">Alle</button><button type="button" class="btn ghost" style="padding:2px 8px;font-size:12px" data-pisel="none">Keine</button></span></div>
           <div class="pilist" id="pi-list"></div></div>
         <h3 style="margin-top:14px">Für die neuen Videos</h3>
-        <div class="row" style="margin-top:10px">
-          <div class="f">${lblHelp("pi-genre","Genre","genres")}<select id="pi-genre">${opt(S.lists.genres)}</select></div>
-          <div class="f">${lblHelp("pi-format","Format","formats")}<select id="pi-format">${opt(S.lists.formats)}</select></div>
-          <div class="f">${lblHelp("pi-mood",moodLabel(),"moods")}<select id="pi-mood">${opt(S.lists.moods)}</select></div>
-        </div>
-        <div class="f" style="margin-top:12px"><label for="pi-tags">Tags</label><input type="text" id="pi-tags" list="dl-alltags2" placeholder="mit Komma trennen"><datalist id="dl-alltags2">${allTags().map(t=>`<option value="${esc(t[0])}">`).join("")}</datalist></div>
-        <label class="check"><input type="checkbox" id="pi-watched"> Als gesehen markieren</label>
-        <label class="check"><input type="checkbox" id="pi-series"> Zusätzlich als Reihe anlegen</label>
-        <div class="f" id="pi-sname-wrap" hidden><label for="pi-sname">Name der Reihe</label><input type="text" id="pi-sname"></div>
+        ${importFormHTML("pi",{def:target?.defaults||{},seriesId:target?target.id:""})}
       </div>
     </div>
     <div class="sheet-foot"><span class="hint err" id="pi-err"></span><div class="actions"><button type="button" class="btn ghost" data-close>Abbrechen</button><button type="submit" class="btn primary" id="pi-go" disabled>Hinzufügen</button></div></div>
   </form></div>`;
   $("#pif").addEventListener("submit",e=>{ e.preventDefault(); piImport(); });
+  importFormInit("pi");
   $("#pi-list").addEventListener("change",e=>{ const id=e.target.dataset.pick; if(!id) return; e.target.checked?PI.sel.add(id):PI.sel.delete(id); piCount(); });
   if(text.trim()) piLoad(); else $("#pi-url").focus();
 }
@@ -1407,7 +1458,7 @@ async function piLoad(){
   msg.className=errs.length?"hint err":"hint ok";
   msg.textContent=[`${plur(ids.length,"Video","Videos")} gefunden`+(plCount?` (davon aus ${plur(plCount,"Playlist","Playlists")})`:""),
     known?`${known===1?"1 ist":known+" sind"} schon in der Videothek`:"", bad?`${plur(bad,"Zeile","Zeilen")} ohne YouTube-URL übersprungen`:"", ...errs].filter(Boolean).join(". ")+".";
-  $("#pi-sname").value=PI.pl.title||"";
+  if(PI.pl.title&&!$("#pi-sname").value) $("#pi-sname").value=PI.pl.title;
   $("#pi-body").hidden=false; piList(); piCount();
 }
 function piList(){
@@ -1418,26 +1469,14 @@ function piList(){
       <span class="num mono">${i+1}</span>${coverHTML(v,{badges:false})}
       <span style="min-width:0"><b>${esc(v.title||(m.gone?"Nicht gefunden":"Ohne Titel"))}</b><small>${esc([v.creator,v.duration?fmtDur(v.duration):"",inLib?"schon in der Videothek":m.gone?"gelöscht, privat oder falsche URL":""].filter(Boolean).join(" · "))}</small></span></label>`; }).join("");
 }
-function piCount(){ const n=PI.sel.size, asS=$("#pi-series").checked; $("#pi-sname-wrap").hidden=!asS; const b=$("#pi-go"); b.disabled=!n&&!asS; b.textContent=n?`${plur(n,"Video","Videos")} hinzufügen`:"Hinzufügen"; }
+function piCount(){ const n=PI.sel.size, asS=importHasSeries("pi"); const b=$("#pi-go"); b.disabled=!n&&!asS; b.textContent=n?`${plur(n,"Video","Videos")} hinzufügen`:"Hinzufügen"; }
 function piImport(){
   const pl=PI.pl; if(!pl) return;
-  const asSeries=$("#pi-series").checked, sname=$("#pi-sname").value.trim();
-  if(asSeries&&!sname){ $("#pi-err").textContent="Gib der Reihe einen Namen."; $("#pi-sname").focus(); return; }
-  const def={genre:$("#pi-genre").value,format:$("#pi-format").value,mood:$("#pi-mood").value,
-    tags:[...new Set($("#pi-tags").value.split(",").map(t=>t.trim().toLowerCase().replace(/\s+/g," ")).filter(Boolean))]};
-  const watched=$("#pi-watched").checked;
-  const ids=pl.ids.filter(id=>PI.sel.has(id)&&!S.videos.has(id));
-  const needMeta=[];
-  ids.forEach((id,i)=>{ const m=pl.meta.get(id); const v=newVideo(id,m&&!m.gone?m:undefined,def,ids.length-i); if(watched) v.watched=true; S.videos.set(id,v); if(!m||!m.title) needMeta.push(id); });
-  let sid=null;
-  if(asSeries){ const now=Date.now(); sid="s"+now.toString(36)+Math.random().toString(36).slice(2,6);
-    S.series.set(sid,{id:sid,name:sname,kind:pl.pid?"Playlist":"Serie",description:(pl.description||"").slice(0,1500),playlistId:pl.pid||"",
-      videoIds:pl.ids.filter(id=>S.videos.has(id)),defaults:def,addedAt:now,updatedAt:now}); }
-  persist(); closeLayer();
-  if(sid){ S.view="series"; lsSet("view","series"); render(); openSeriesDrawer(sid); }
-  else { S.view="videos"; lsSet("view","videos"); S.sort="added"; $("#sort").value="added"; lsSet("sort","added"); render(); }
-  toast(ids.length?`${plur(ids.length,"Video","Videos")} hinzugefügt`:"Reihe angelegt");
-  if(needMeta.length) enrichStubs(needMeta);
+  const f=readImportForm("pi"); if(f.err){ $("#pi-err").textContent=f.err; $(f.focus).focus(); return; }
+  const items=pl.ids.filter(id=>PI.sel.has(id)&&!S.videos.has(id)).map(id=>({id,meta:pl.meta.get(id)}));
+  // in die Reihe: alle Videos der Liste, die danach in der Bibliothek sind (auch schon vorhandene), in Listen-Reihenfolge
+  const r=importVideos(items,{...f,seriesIds:pl.ids,seriesInfo:{kind:pl.pid?"Playlist":"Serie",playlistId:pl.pid,description:pl.description}});
+  finishImport(r);
 }
 
 /* ---------- Werte umbenennen (Videos, Kanäle, Reihen) ---------- */
@@ -1467,6 +1506,7 @@ let LE=null;
 function openLists(tab){ if(!["genres","formats","moods"].includes(tab)) tab="genres";
   LE={tab,label:S.lists.moodLabel||"Stimmung",rows:{},recOpen:false};
   for(const [lk] of LIST_KEYS) LE.rows[lk]=S.lists[lk].map(n=>({orig:n,name:n,desc:descOf(lk,n)}));
+  LE.rxRow=LE.rows.formats.find(r=>r.orig===rxFormatName())||null;
   S.openId=null; S.openSeries=null; S.openFeed=null;
   $("#layer").innerHTML=`<div class="scrim"></div><div class="modal" data-modalbg><form class="sheet" id="lf" style="width:min(820px,100%)" novalidate>
     <div class="sheet-head"><h2>Listen & Einordnung</h2><button type="button" class="btn ghost" data-close aria-label="Schließen">✕</button></div>
@@ -1484,7 +1524,9 @@ function openLists(tab){ if(!["genres","formats","moods"].includes(tab)) tab="ge
   $("#lf").addEventListener("submit",e=>{ e.preventDefault(); leSave(); });
   $("#lf").addEventListener("input",e=>{ const t=e.target; const i=t.dataset.i;
     if(t.id==="le-label"){ LE.label=t.value; leTabs(); return; }
+    if(t.name==="le-rx"){ LE.rxRow=t.value==="none"?null:LE.rows.formats[+t.value]; return; }
     if(i===undefined) return; const row=LE.rows[LE.tab][+i]; if(t.classList.contains("le-name")) row.name=t.value; else row.desc=t.value; });
+  $("#lf").addEventListener("change",e=>{ const t=e.target; if(t.name==="le-rx") LE.rxRow=t.value==="none"?null:LE.rows.formats[+t.value]; });
   leTabs(); lePane();
 }
 function leTabs(){ $("#le-tabs").innerHTML=[["genres","Genre"],["formats","Format"],["moods",LE.label||"Stimmung"]].map(([k,l])=>`<button type="button" data-letab="${k}" class="${LE.tab===k?"on":""}">${esc(l)} <span class="mono" style="opacity:.6">${LE.rows[k].length}</span></button>`).join(""); }
@@ -1496,12 +1538,15 @@ function lePane(){
     <div class="lerows">${rows.map((r,i)=>`<div class="lerow"><div class="lerow-top">
         <input type="text" class="le-name" data-i="${i}" value="${esc(r.name)}" aria-label="Name">
         <span class="hint mono" style="white-space:nowrap">${r.orig?plur(cnt.get(r.orig)||0,"Video","Videos"):"neu"}</span>
+        ${LE.tab==="formats"?`<label class="rxpick" title="Videos mit diesem Format gelten als Reaction: Original-Feld, Reaction-Filter und Vorschläge"><input type="radio" name="le-rx" value="${i}" ${LE.rxRow===r?"checked":""}> Reaction</label>`:""}
         <span class="pact"><button type="button" data-lemv="-1" data-i="${i}" ${i===0?"disabled":""} aria-label="Nach oben">↑</button><button type="button" data-lemv="1" data-i="${i}" ${i===rows.length-1?"disabled":""} aria-label="Nach unten">↓</button><button type="button" data-lerm="${i}" aria-label="Entfernen" title="Entfernen">✕</button></span></div>
         <textarea class="le-desc" data-i="${i}" rows="2" placeholder="Einordnungshilfe (optional). Erste Zeile: kurze Beschreibung. Weitere Zeilen z. B. „Dazu: …“, „Nicht: … → anderer Eintrag“.">${esc(r.desc)}</textarea></div>`).join("")||'<p class="hint">Noch keine Einträge.</p>'}</div>
-    <button type="button" class="btn" data-leadd style="margin-top:8px">+ Eintrag</button>`;
+    <div class="actions" style="margin-top:8px;align-items:center"><button type="button" class="btn" data-leadd>+ Eintrag</button>
+      ${LE.tab==="formats"?`<label class="check" style="padding:0"><input type="radio" name="le-rx" value="none" ${LE.rxRow?"":"checked"}> Kein Format als Reaction markieren</label>`:""}</div>
+    ${LE.tab==="formats"?`<p class="hint" style="margin:6px 0 0">„Reaction“ markiert das Format, bei dem du ein Original verknüpfst. Es zählt für das Original-Feld, den Reactions-Filter und die Vorschläge aus der Beschreibung.</p>`:""}`;
 }
 function leSave(){
-  const lists={moodLabel:(LE.label||"").trim()||"Stimmung",desc:{genres:{},formats:{},moods:{}}}; const maps={genre:{},format:{},mood:{}};
+  const lists={moodLabel:(LE.label||"").trim()||"Stimmung",rxFormat:LE.rxRow&&LE.rows.formats.includes(LE.rxRow)?LE.rxRow.name.trim().replace(/\s+/g," "):"",desc:{genres:{},formats:{},moods:{}}}; const maps={genre:{},format:{},mood:{}};
   for(const [lk,f] of LIST_KEYS){
     const names=[];
     for(const r of LE.rows[lk]){ const n=r.name.trim().replace(/\s+/g," "); if(!n) continue;
@@ -1531,7 +1576,7 @@ function lePreview(){
 function applyRecommended(){
   const maps={}; for(const f of ["genre","format","mood"]) maps[f]=Object.fromEntries(Object.entries(RECOMMENDED_MAP[f]).filter(([a,b])=>a!==b));
   const n=applyValueMap(maps);
-  S.lists=structuredClone({genres:RECOMMENDED.genres,formats:RECOMMENDED.formats,moods:RECOMMENDED.moods,moodLabel:RECOMMENDED.moodLabel,desc:RECOMMENDED.desc});
+  S.lists=structuredClone({genres:RECOMMENDED.genres,formats:RECOMMENDED.formats,moods:RECOMMENDED.moods,moodLabel:RECOMMENDED.moodLabel,rxFormat:RECOMMENDED.rxFormat,desc:RECOMMENDED.desc});
   S.listsUpdatedAt=Date.now(); persist(); closeLayer();
   const old=oldValues(); const nOld=[...S.videos.values()].filter(v=>LIST_KEYS.some(([lk,f])=>isOldVal(lk,v[f]))).length;
   if(nOld){ S.view="videos"; lsSet("view","videos"); clearVideoFilters(); S.f.todo="old"; }
@@ -1635,15 +1680,7 @@ function openChannelBrowse(input=""){
         <div class="pilist cblist" id="cb-list"></div>
         <div class="cbbar" id="cb-more"></div>
         <h3 style="margin-top:14px">Für die neuen Videos</h3>
-        <div class="row" style="margin-top:10px">
-          <div class="f">${lblHelp("cb-genre","Genre","genres")}<select id="cb-genre" data-lk="genres">${opt(S.lists.genres)}</select><span class="hint ghint" id="cb-genre-h"></span></div>
-          <div class="f">${lblHelp("cb-format","Format","formats")}<select id="cb-format" data-lk="formats">${opt(S.lists.formats)}</select><span class="hint ghint" id="cb-format-h"></span></div>
-          <div class="f">${lblHelp("cb-mood",moodLabel(),"moods")}<select id="cb-mood" data-lk="moods">${opt(S.lists.moods)}</select><span class="hint ghint" id="cb-mood-h"></span></div>
-        </div>
-        <div class="f" style="margin-top:12px"><label for="cb-tags">Tags</label><input type="text" id="cb-tags" list="dl-alltags4" placeholder="mit Komma trennen"><datalist id="dl-alltags4">${allTags().map(t=>`<option value="${esc(t[0])}">`).join("")}</datalist></div>
-        <label class="check"><input type="checkbox" id="cb-watched"> Als gesehen markieren</label>
-        <label class="check"><input type="checkbox" id="cb-series"> Zusätzlich als Reihe anlegen</label>
-        <div class="f" id="cb-sname-wrap" hidden><label for="cb-sname">Name der Reihe</label><input type="text" id="cb-sname"></div>
+        ${importFormHTML("cb")}
       </div>
     </div>
     <div class="sheet-foot"><span class="hint err" id="cb-err"></span><div class="actions"><button type="button" class="btn ghost" data-close>Abbrechen</button><button type="submit" class="btn primary" id="cb-go" disabled>Hinzufügen</button></div></div>
@@ -1657,7 +1694,7 @@ function openChannelBrowse(input=""){
   $("#cb-shorts").addEventListener("change",e=>{ CB.hideShorts=e.target.checked; cbRender(); });
   $("#cb-known").addEventListener("change",e=>{ CB.hideKnown=e.target.checked; cbRender(); });
   $("#cb-rule").addEventListener("change",e=>{ CB.useRule=e.target.checked; cbRender(); });
-  $("#cb-series").addEventListener("change",cbCount);
+  importFormInit("cb");
   $("#cb-list").addEventListener("change",e=>{ const id=e.target.dataset.pick; if(!id) return; e.target.checked?CB.sel.add(id):CB.sel.delete(id); cbCount(); });
   if(input.trim()) cbStart(); else $("#cb-ch").focus();
 }
@@ -1669,12 +1706,11 @@ async function cbStart(){
     Object.assign(CB,{ch:c,items:[],sel:new Set(),page:"",done:false,stop:false,total:c.videoCount??null});
     const ab=S.channels.get(c.id);
     if(ab){ // Standardwerte und Regel aus den Abos übernehmen
-      if(ab.genre) $("#cb-genre").value=ab.genre; if(ab.format) $("#cb-format").value=ab.format; if((ab.tags||[]).length) $("#cb-tags").value=ab.tags.join(", ");
-      document.querySelectorAll("#cbf select[data-lk]").forEach(selHint);
+      importFormFill("cb",{genre:ab.genre,format:ab.format,tags:ab.tags||[]});
       const rule=chRuleSummary(ab); $("#cb-rulewrap").hidden=!rule; $("#cb-ruletxt").textContent=`Kanal-Regel anwenden (${rule})`; CB.useRule=!!rule; $("#cb-rule").checked=!!rule;
       if(ab.hideShorts){ CB.hideShorts=true; $("#cb-shorts").checked=true; }
     } else { $("#cb-rulewrap").hidden=true; CB.useRule=false; }
-    $("#cb-sname").value=c.title;
+    if(!$("#cb-sname").value) $("#cb-sname").value=c.title;
     $("#cb-body").hidden=false;
     await cbLoadPage();
   }catch(e){ msg.className="hint err"; msg.textContent=e.msg||"Der Kanal konnte nicht geladen werden."; }
@@ -1734,27 +1770,15 @@ function cbMore(){
 function cbCount(){
   const vis=cbVisible(); const visSel=vis.filter(x=>CB.sel.has(x.id)).length;
   $("#cb-count").textContent=`${plur(vis.length,"Video","Videos")} angezeigt · ${CB.sel.size} ausgewählt${CB.sel.size!==visSel?` (${CB.sel.size-visSel} davon gerade ausgeblendet)`:""}`;
-  const asS=$("#cb-series").checked; $("#cb-sname-wrap").hidden=!asS;
   const b=$("#cb-go"); b.disabled=!CB.sel.size; b.textContent=CB.sel.size?`${plur(CB.sel.size,"Video","Videos")} hinzufügen`:"Hinzufügen";
 }
 function cbImport(){
-  const ids=CB.items.filter(x=>CB.sel.has(x.id)&&!S.videos.has(x.id)); if(!ids.length) return;
-  const asSeries=$("#cb-series").checked, sname=$("#cb-sname").value.trim();
-  if(asSeries&&!sname){ $("#cb-err").textContent="Gib der Reihe einen Namen."; $("#cb-sname").focus(); return; }
-  ids.sort((a,b)=>Date.parse(a.published)-Date.parse(b.published)); // älteste zuerst anlegen, damit „zuletzt hinzugefügt“ die neuesten oben zeigt
-  const def={genre:$("#cb-genre").value,format:$("#cb-format").value,mood:$("#cb-mood").value,
-    tags:[...new Set($("#cb-tags").value.split(",").map(t=>t.trim().toLowerCase().replace(/\s+/g," ")).filter(Boolean))]};
-  const watched=$("#cb-watched").checked;
-  ids.forEach((x,i)=>{ const v=newVideo(x.id,{title:x.title,creator:CB.ch.title,channelId:CB.ch.id,uploadDate:(x.published||"").slice(0,10),duration:x.duration||null,status:"Verfügbar"},def,i);
-    if(watched) v.watched=true; S.videos.set(x.id,v); });
-  let sid=null;
-  if(asSeries){ const now=Date.now(); sid="s"+now.toString(36)+Math.random().toString(36).slice(2,6);
-    const order=ids.map(x=>x.id);
-    S.series.set(sid,{id:sid,name:sname,kind:"Serie",description:"",playlistId:"",videoIds:order,defaults:def,addedAt:now,updatedAt:now}); }
-  persist(); closeLayer();
-  if(sid){ S.view="series"; lsSet("view","series"); render(); openSeriesDrawer(sid); }
-  else { S.view="videos"; lsSet("view","videos"); S.sort="added"; $("#sort").value="added"; lsSet("sort","added"); render(); }
-  toast(`${plur(ids.length,"Video","Videos")} von „${CB.ch.title}“ hinzugefügt`);
+  const sel=CB.items.filter(x=>CB.sel.has(x.id)&&!S.videos.has(x.id)); if(!sel.length) return;
+  const f=readImportForm("cb"); if(f.err){ $("#cb-err").textContent=f.err; $(f.focus).focus(); return; }
+  const byDate=(a,b)=>Date.parse(b.published)-Date.parse(a.published);
+  const items=[...sel].sort(byDate).map(x=>({id:x.id,meta:{title:x.title,creator:CB.ch.title,channelId:CB.ch.id,uploadDate:(x.published||"").slice(0,10),duration:x.duration||null,status:"Verfügbar"}}));
+  const r=importVideos(items,{...f,seriesIds:[...sel].sort(byDate).reverse().map(x=>x.id)}); // Reihe chronologisch
+  finishImport(r,{msg:`${plur(r.added,"Video","Videos")} von „${CB.ch.title}“ hinzugefügt`});
 }
 
 /* ---------- Reactions zu einem Video suchen (Videothek + YouTube) ---------- */
@@ -1765,7 +1789,6 @@ function openReactionSearch(origId){
   S.openId=null; S.openSeries=null; S.openFeed=null; S.playing=false;
   RS={orig:o,lib:null,libErr:"",yt:[],ytPage:"",ytDone:false,ytLoading:false,ytErr:"",ytStarted:false,sel:new Set(),onlyLink:true,hideShorts:false};
   const rxFmt=S.lists.formats.find(isRxFormat)||"";
-  const opt=(list,val)=>`<option value="">–</option>${[...new Set([...list,...(val&&!list.includes(val)?[val]:[])])].map(x=>`<option value="${esc(x)}" ${x===val?"selected":""}>${esc(x)}</option>`).join("")}`;
   $("#layer").innerHTML=`<div class="scrim"></div><div class="modal" data-modalbg><form class="sheet" id="rsf" style="width:min(880px,100%)" novalidate>
     <div class="sheet-head"><h2>Reactions suchen</h2><button type="button" class="btn ghost" data-close aria-label="Schließen">✕</button></div>
     <div class="sheet-body">
@@ -1779,19 +1802,13 @@ function openReactionSearch(origId){
           <label class="check" style="padding:0"><input type="checkbox" id="rs-onlylink" checked> Nur Treffer, die das Original in der Beschreibung verlinken</label>
           <label class="check" style="padding:0"><input type="checkbox" id="rs-shorts"> Shorts ausblenden</label></div>
         <div id="rs-yt"></div></section>
-      <section id="rs-new" hidden><h3>Für neu hinzugefügte Reactions</h3>
-        <div class="row" style="margin-top:10px">
-          <div class="f">${lblHelp("rs-genre","Genre","genres")}<select id="rs-genre" data-lk="genres">${opt(S.lists.genres,o.genre)}</select><span class="hint ghint" id="rs-genre-h"></span></div>
-          <div class="f">${lblHelp("rs-format","Format","formats")}<select id="rs-format" data-lk="formats">${opt(S.lists.formats,rxFmt)}</select><span class="hint ghint" id="rs-format-h"></span></div>
-          <div class="f">${lblHelp("rs-mood",moodLabel(),"moods")}<select id="rs-mood" data-lk="moods">${opt(S.lists.moods,"")}</select><span class="hint ghint" id="rs-mood-h"></span></div>
-        </div>
-        <div class="f" style="margin-top:12px"><label for="rs-tags">Tags</label><input type="text" id="rs-tags" value="${esc((o.tags||[]).join(", "))}" placeholder="mit Komma trennen"></div>
-        <label class="check"><input type="checkbox" id="rs-watched"> Als gesehen markieren</label>
-        <p class="hint" style="margin:0">Genre und Tags sind vom Original vorausgefüllt.</p></section>
+      <section id="rs-new" hidden><h3>Für die übernommenen Reactions</h3>
+        ${importFormHTML("rs",{def:{genre:o.genre,format:rxFmt,tags:o.tags||[]}})}
+        <p class="hint" style="margin:0">Genre, Format, ${esc(moodLabel())} und Tags gelten für neu hinzugefügte Videos und sind vom Original vorausgefüllt. Die Reihe gilt für alle markierten.</p></section>
     </div>
     <div class="sheet-foot"><span class="hint" id="rs-count"></span><div class="actions"><button type="button" class="btn ghost" data-close>Abbrechen</button><button type="submit" class="btn primary" id="rs-go" disabled>Übernehmen</button></div></div>
   </form></div>`;
-  document.querySelectorAll("#rsf select[data-lk]").forEach(selHint);
+  importFormInit("rs");
   $("#rsf").addEventListener("submit",e=>{ e.preventDefault(); rsApply(); });
   $("#rsf").addEventListener("change",e=>{ const t=e.target;
     if(t.dataset.rspick){ t.checked?RS.sel.add(t.dataset.rspick):RS.sel.delete(t.dataset.rspick); rsCount(); }
@@ -1853,25 +1870,23 @@ function rsRenderYt(){
 }
 function rsCount(){
   const newIds=[...RS.sel].filter(id=>!S.videos.has(id)), link=[...RS.sel].filter(id=>S.videos.has(id));
-  $("#rs-new").hidden=!newIds.length;
+  $("#rs-new").hidden=!RS.sel.size;
   $("#rs-count").textContent=RS.sel.size?[newIds.length?`${plur(newIds.length,"neues Video","neue Videos")}`:"",link.length?`${link.length} zum Verknüpfen`:""].filter(Boolean).join(" · "):"";
   const b=$("#rs-go"); b.disabled=!RS.sel.size; b.textContent=RS.sel.size?`${plur(RS.sel.size,"Reaction","Reactions")} übernehmen`:"Übernehmen";
 }
 function rsApply(){
-  const oid=RS.orig.id, now=Date.now(); let added=0, linked=0;
-  const def={genre:$("#rs-genre").value,format:$("#rs-format").value,mood:$("#rs-mood").value,
-    tags:[...new Set($("#rs-tags").value.split(",").map(t=>t.trim().toLowerCase().replace(/\s+/g," ")).filter(Boolean))]};
-  const watched=$("#rs-watched").checked;
-  const newOnes=RS.yt.filter(x=>RS.sel.has(x.id)&&!S.videos.has(x.id)).sort((a,b)=>Date.parse(a.published)-Date.parse(b.published));
-  newOnes.forEach((x,i)=>{ const v=newVideo(x.id,{title:x.title,creator:x.channelTitle,channelId:x.channelId,uploadDate:(x.published||"").slice(0,10),duration:x.duration||null,status:"Verfügbar"},def,i);
-    v.reactsTo=[oid]; if(watched) v.watched=true; S.videos.set(x.id,v); added++; });
-  for(const id of RS.sel){ const v=S.videos.get(id); if(!v||newOnes.some(x=>x.id===id)||(v.reactsTo||[]).includes(oid)) continue;
+  const oid=RS.orig.id, now=Date.now(); let linked=0;
+  const f=readImportForm("rs"); if(f.err){ $("#rs-count").textContent=f.err; $(f.focus).focus(); return; }
+  const fresh=RS.yt.filter(x=>RS.sel.has(x.id)&&!S.videos.has(x.id)).sort((a,b)=>Date.parse(b.published)-Date.parse(a.published));
+  const freshIds=new Set(fresh.map(x=>x.id));
+  for(const id of RS.sel){ const v=S.videos.get(id); if(!v||freshIds.has(id)||(v.reactsTo||[]).includes(oid)) continue;
     const p={reactsTo:[...(v.reactsTo||[]),oid],updatedAt:now};
     if(!v.genre&&RS.orig.genre) p.genre=RS.orig.genre;
     if(!v.format){ const rf=S.lists.formats.find(isRxFormat); if(rf) p.format=rf; }
     S.videos.set(id,{...v,...p}); linked++; }
-  persist(); closeLayer(); render(); openDrawer(oid);
-  toast([added?`${plur(added,"Reaction","Reactions")} hinzugefügt`:"",linked?`${linked} verknüpft`:""].filter(Boolean).join(", "));
+  const items=fresh.map(x=>({id:x.id,meta:{title:x.title,creator:x.channelTitle,channelId:x.channelId,uploadDate:(x.published||"").slice(0,10),duration:x.duration||null,status:"Verfügbar"}}));
+  const r=importVideos(items,{...f,extra:v=>{ v.reactsTo=[oid]; },seriesIds:[...RS.sel]});
+  finishImport(r,{after:()=>{ render(); openDrawer(oid); },msg:[r.added?`${plur(r.added,"Reaction","Reactions")} hinzugefügt`:"",linked?`${linked} verknüpft`:"",r.sid&&!r.added&&!linked?"Reihe aktualisiert":""].filter(Boolean).join(", ")||"Nichts geändert"});
 }
 
 /* ---------- Lesezeichen: Videos von einer YouTube-Seite übernehmen ---------- */
@@ -1961,7 +1976,7 @@ function openEditor(id,prefillUrl){
       <div class="f"><label for="e-title">Titel</label><input type="text" id="e-title" value="${esc(v?.title)}"></div>
       <div class="row">
         <div class="f"><label for="e-creator">Creator</label><input type="text" id="e-creator" list="dl-creators" value="${esc(v?.creator)}" autocomplete="off">
-          <datalist id="dl-creators">${allCreators().map(c=>`<option value="${esc(c[0])}">`).join("")}</datalist></div>
+          <datalist id="dl-creators">${creatorNames().map(c=>`<option value="${esc(c)}">`).join("")}</datalist></div>
         <div class="f"><label for="e-upload">Upload</label><input type="date" id="e-upload" value="${esc(v?.uploadDate)}"></div>
         <div class="f"><label for="e-dur">Dauer</label><input type="text" id="e-dur" class="mono" placeholder="12:34" value="${v?.duration?fmtDur(v.duration):""}"></div>
       </div>
@@ -2083,7 +2098,7 @@ async function suggestOriginals({auto,title}={}){
   const fmt=$("#e-format"), looksRx=/react|reagier|reaktion/i.test(title||$("#e-title").value);
   const rxo=[...fmt.options].find(o=>isRxFormat(o.value));
   if(auto&&E.sugg.length&&!fmt.value&&looksRx&&rxo){ fmt.value=rxo.value; selHint(fmt); const h=$("#e-urlhint"); h.textContent+=` Sieht nach einer Reaction aus: Format gesetzt, ${plur(E.sugg.length,"verlinktes Video","verlinkte Videos")} unten als Original vorgeschlagen.`; }
-  else if(auto&&E.sugg.length&&!isRxFormat(fmt.value)){ const h=$("#e-urlhint"); h.insertAdjacentHTML("beforeend",` In der Beschreibung ${E.sugg.length===1?"ist 1 Video":`sind ${E.sugg.length} Videos`} verlinkt. <button type="button" class="btn ghost" style="padding:0 4px;color:var(--accent)" data-asrx>Als Reaction markieren</button>`); }
+  else if(auto&&E.sugg.length&&rxFormatName()&&!isRxFormat(fmt.value)){ const h=$("#e-urlhint"); h.insertAdjacentHTML("beforeend",` In der Beschreibung ${E.sugg.length===1?"ist 1 Video":`sind ${E.sugg.length} Videos`} verlinkt. <button type="button" class="btn ghost" style="padding:0 4px;color:var(--accent)" data-asrx>Als Reaction markieren</button>`); }
   renderRx();
 }
 function pickSuggestion(id){
@@ -2231,12 +2246,13 @@ document.addEventListener("click",e=>{
   if(d.helplists!==undefined){ closeHelp(); openLists(); return; }
   if(d.letab){ LE.tab=d.letab; leTabs(); lePane(); return; }
   if(d.lemv){ const a=LE.rows[LE.tab], i=+d.i, j=i+(+d.lemv); if(a[j]){ [a[i],a[j]]=[a[j],a[i]]; lePane(); } return; }
-  if(d.lerm!==undefined){ LE.rows[LE.tab].splice(+d.lerm,1); leTabs(); lePane(); return; }
+  if(d.lerm!==undefined){ const [gone]=LE.rows[LE.tab].splice(+d.lerm,1); if(gone===LE.rxRow) LE.rxRow=null; leTabs(); lePane(); return; }
   if(d.leadd!==undefined){ LE.rows[LE.tab].push({orig:null,name:"",desc:""}); leTabs(); lePane(); const ins=document.querySelectorAll(".le-name"); ins[ins.length-1]?.focus(); return; }
   if(d.lerec!==undefined){ lePreview(); return; }
   if(d.lerecno!==undefined){ $("#le-rec").innerHTML=""; return; }
   if(d.lerecgo!==undefined){ applyRecommended(); return; }
   if(d.bulkedit!==undefined){ openBulkEdit(); return; }
+  if(d.bulkto){ openBulk("",{seriesId:d.bulkto}); return; }
   if(d.rxsearch){ openReactionSearch(d.rxsearch); return; }
   if(d.rsyt!==undefined){ rsYt(); return; }
   if(d.cbrowse!==undefined){ const pre=d.cbrowse||(E&&!E.id&&$("#e-url")?($("#e-url").value||"").trim():""); openChannelBrowse(/^UC[\w-]{22}$/.test(pre)?"https://www.youtube.com/channel/"+pre:pre); return; }
@@ -2283,10 +2299,9 @@ document.addEventListener("click",e=>{
   if(d.sdelYes!==undefined){ const id=S.openSeries; closeLayer(); S.series.delete(id); S.f.series.delete(id); persist(); render(); toast("Reihe gelöscht, Videos bleiben erhalten"); return; }
   if(d.sedpick){ ES.pick.push(d.sedpick); ES.q=""; renderSedList(); $("#se-q").value=""; renderSedRes(); return; }
   if(d.sedrm){ ES.pick=ES.pick.filter(x=>x!==d.sedrm); renderSedList(); return; }
-  if(d.loadpl!==undefined){ loadPlaylistInEditor(); return; }
   if(d.findorig!==undefined){ t.disabled=true; t.textContent="Suche …"; suggestOriginals(); return; }
   if(d.sugg){ pickSuggestion(d.sugg); return; }
-  if(d.asrx!==undefined){ const f=$("#e-format"); let o=[...f.options].find(o=>isRxFormat(o.value)); if(!o){ o=new Option("Reaction","Reaction"); f.add(o); } f.value=o.value; selHint(f); t.remove(); renderRx(); $("#e-rx").scrollIntoView({block:"nearest"}); return; }
+  if(d.asrx!==undefined){ const f=$("#e-format"); const rf=rxFormatName(); if(!rf) return; let o=[...f.options].find(o=>o.value===rf); if(!o){ o=new Option(rf,rf); f.add(o); } f.value=o.value; selHint(f); t.remove(); renderRx(); $("#e-rx").scrollIntoView({block:"nearest"}); return; }
   if(d.clearkind!==undefined){ S.sf.kind.clear(); render(); return; }
   if(d.addseriesWith){ openSeriesEditor(null,{pick:[d.addseriesWith]}); return; }
   if(d.importpl){ openPlaylistImport(d.importpl); return; }
@@ -2332,7 +2347,7 @@ document.addEventListener("change",e=>{
   const t=e.target;
   if(t.closest?.(".chbody")&&t.dataset.k&&(t.type==="checkbox"||t.tagName==="SELECT")) onChannelField(t);
   if(t.id==="feedHiddenToggle"){ F.showHidden=t.checked; render(); }
-  if(t.id==="pi-series") piCount();
+  if(t.dataset.impseries){ importSeriesChanged(t.dataset.impseries); if(t.dataset.impseries==="pi"&&PI?.pl) piCount(); }
   if(t.matches?.("select[data-lk]")) selHint(t);
   if(t.dataset.sw){ const v=S.videos.get(t.dataset.sw); if(v) updateVideo(v.id,{watched:t.checked}); }
   if(t.id==="addToSeries"&&t.value){ const vid=S.openId;

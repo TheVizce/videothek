@@ -445,7 +445,7 @@ const Store={
         r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); r.onblocked=()=>rej(new Error("Die Datenbank ist in einem anderen Tab blockiert. Schließe andere Tabs der Videothek."));
       });
       this.db.onversionchange=()=>{ this.db.close(); };
-    }catch(e){ this.mode="mem"; this.initErr=e; } // ohne IndexedDB: nur Arbeitsspeicher, nie den gemeinsamen localStorage füllen
+    }catch(e){ this.mode="mem"; this.initErr=e; console.warn("Videothek: IndexedDB nicht verfügbar",e); } // ohne IndexedDB: nur Arbeitsspeicher, nie den gemeinsamen localStorage füllen
     this.ready=true;
   },
   tx(mode){ return this.db.transaction(DB_STORE,mode).objectStore(DB_STORE); },
@@ -505,7 +505,7 @@ async function storageInfoHTML(){
   let est=null; try{ est=await navigator.storage?.estimate?.(); }catch(e){}
   let persisted; try{ persisted=await navigator.storage?.persisted?.(); }catch(e){}
   const mb=b=>(b/1048576).toFixed(b<1048576?2:1).replace(".",",")+" MB";
-  return [Store.mode==="idb"?`Gespeichert in der Browser-Datenbank „${DB_NAME}“.`:`IndexedDB ist nicht verfügbar (${Store.initErr?.message||"unbekannt"}). Änderungen liegen nur im Arbeitsspeicher und gehen beim Schließen verloren, wenn sie nicht über den Sync oder einen Export gesichert sind.`,
+  return [Store.mode==="idb"?`Gespeichert in der Browser-Datenbank „${DB_NAME}“.`:`IndexedDB ist in diesem Browser nicht verfügbar. Änderungen liegen nur im Arbeitsspeicher und gehen beim Schließen verloren, wenn sie nicht über den Sync oder einen Export gesichert sind.`,
     est?.usage!=null?`Belegt: ${mb(est.usage)}${est.quota?` von verfügbar ${mb(est.quota)}`:""}.`:"",
     persisted===true?"Dauerhafter Speicher ist gewährt: Der Browser löscht die Daten nicht automatisch.":persisted===false?"Dauerhafter Speicher wurde nicht gewährt: Bei Platzmangel könnte der Browser die lokalen Daten löschen. Halte deshalb GitHub verbunden oder exportiere regelmäßig.":""].filter(Boolean).join(" ");
 }
@@ -2372,7 +2372,7 @@ const addParam=new URLSearchParams(location.search).get("add");
   try{ Object.assign(S.cfg,(await Store.get("config"))||{}); cache=(await Store.get("library"))||null;
     const fc=await Store.get("feed"); if(fc){ F.items=fc.items||[]; F.fetchedAt=fc.fetchedAt||0; } }
   catch(e){ storeFail(e,"Das Laden aus dem Browser-Speicher"); }
-  if(Store.mode!=="idb"&&!S.storeErr){ S.storeErr=`IndexedDB ist in diesem Browser nicht verfügbar (${Store.initErr?.message||"unbekannt"}), z. B. im privaten Modus. Änderungen bleiben nur bis zum Schließen erhalten, außer der Sync ist eingerichtet. Exportiere sonst vor dem Schließen.`; }
+  if(Store.mode!=="idb"&&!S.storeErr){ S.storeErr=`IndexedDB ist in diesem Browser nicht verfügbar, z. B. im privaten Modus. Änderungen bleiben nur bis zum Schließen erhalten, außer der Sync ist eingerichtet. Exportiere sonst vor dem Schließen.`; }
   if(cache&&cache.data){ applyData(cache.data); S.dirty=!!cache.dirty; }
   S.loaded=true;
   S.storeLoaded=true;

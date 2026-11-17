@@ -239,6 +239,8 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:4px 0}
 .rstags{display:flex;flex-wrap:wrap;gap:4px;margin-top:3px}
 .rstag{font-size:11px;padding:0 6px;border-radius:3px;border:1px solid var(--line);color:var(--muted)}
 .rstag.new{border-color:var(--accent);color:var(--accent)}
+.rstag.known{border-color:var(--ok);color:var(--ok)}
+.rshead{font-family:var(--f-mono);font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin:10px 0 2px}
 .rstag.warn{border-color:var(--warn);color:var(--warn)}
 @media (max-width:600px){.rsrow{grid-template-columns:auto 72px minmax(0,1fr)}}
 .bmlink{cursor:grab;border-style:dashed;font-weight:600}
@@ -1800,7 +1802,8 @@ function openReactionSearch(origId){
           ${S.cfg.ytKey?"":`<span class="hint">Für die Suche hier brauchst du den YouTube-API-Schlüssel. Der Link funktioniert auch ohne.</span>`}</div>
         <div id="rs-ytopts" class="cbbar" hidden>
           <label class="check" style="padding:0"><input type="checkbox" id="rs-onlylink" checked> Nur Treffer, die das Original in der Beschreibung verlinken</label>
-          <label class="check" style="padding:0"><input type="checkbox" id="rs-shorts"> Shorts ausblenden</label></div>
+          <label class="check" style="padding:0"><input type="checkbox" id="rs-shorts"> Shorts ausblenden</label>
+          <label class="check" style="padding:0"><input type="checkbox" id="rs-onlyknown"> Nur bekannte Creator</label></div>
         <div id="rs-yt"></div></section>
       <section id="rs-new" hidden><h3>Für die übernommenen Reactions</h3>
         ${importFormHTML("rs",{def:{genre:o.genre,format:rxFmt,tags:o.tags||[]}})}
@@ -1813,15 +1816,24 @@ function openReactionSearch(origId){
   $("#rsf").addEventListener("change",e=>{ const t=e.target;
     if(t.dataset.rspick){ t.checked?RS.sel.add(t.dataset.rspick):RS.sel.delete(t.dataset.rspick); rsCount(); }
     if(t.id==="rs-onlylink"){ RS.onlyLink=t.checked; rsRenderYt(); }
-    if(t.id==="rs-shorts"){ RS.hideShorts=t.checked; rsRenderYt(); } });
+    if(t.id==="rs-shorts"){ RS.hideShorts=t.checked; rsRenderYt(); }
+    if(t.id==="rs-onlyknown"){ RS.onlyKnown=t.checked; rsRenderYt(); } });
   rsLib();
 }
-function rsRow(x,{inLib,linked,hasLink,note}={}){
+/* Bekannte Creator: Favorit (3) > Abo (2) > schon Videos in der Videothek (1) > unbekannt (0) */
+function knownCreator(channelId,channelTitle){
+  const c=S.channels.get(channelId);
+  const key=channelId||CI.nameToId.get(channelTitle)||(channelTitle?"n:"+channelTitle:"");
+  let n=0; for(const v of S.videos.values()) if(creatorKey(v)===key||(channelTitle&&!v.channelId&&v.creator===channelTitle)) n++;
+  return {rank:c?.fav?3:c?2:n?1:0,n,fav:!!c?.fav,abo:!!c};
+}
+function knownTag(k){ return k.fav?'<span class="rstag known">★ Favorit</span>':k.abo?'<span class="rstag known">In deinen Abos</span>':k.n?`<span class="rstag known">${plur(k.n,"Video","Videos")} in deiner Videothek</span>`:""; }
+function rsRow(x,{inLib,linked,hasLink,note,known}={}){
   const v=S.videos.get(x.id)||x;
   return `<label class="pirow rsrow ${linked?"off":""}"><input type="checkbox" data-rspick="${x.id}" ${RS.sel.has(x.id)?"checked":""} ${linked?"disabled":""}>
     ${coverHTML({id:x.id,title:v.title||x.title,creator:v.creator||x.channelTitle},{badges:false})}
     <span style="min-width:0"><b>${esc(v.title||x.title||"Ohne Titel")}</b><small>${esc([v.creator||x.channelTitle,x.published?new Date(x.published).toLocaleDateString("de-DE"):"",(v.duration||x.duration)?fmtDur(v.duration||x.duration):""].filter(Boolean).join(" · "))}</small>
-    <span class="rstags">${linked?'<span class="rstag">schon verknüpft</span>':inLib?'<span class="rstag">in der Videothek: wird verknüpft</span>':'<span class="rstag new">neu: wird hinzugefügt</span>'}${hasLink===false?'<span class="rstag warn">Original nicht in der Beschreibung</span>':""}${note?`<span class="rstag">${esc(note)}</span>`:""}</span></span></label>`;
+    <span class="rstags">${linked?'<span class="rstag">schon verknüpft</span>':inLib?'<span class="rstag">in der Videothek: wird verknüpft</span>':'<span class="rstag new">neu: wird hinzugefügt</span>'}${known?knownTag(known):""}${hasLink===false?'<span class="rstag warn">Original nicht in der Beschreibung</span>':""}${note?`<span class="rstag">${esc(note)}</span>`:""}</span></span></label>`;
 }
 async function rsLib(){
   const box=$("#rs-lib"), oid=RS.orig.id;
@@ -1859,10 +1871,15 @@ function rsRenderYt(){
   const box=$("#rs-yt"); if(!box) return; const oid=RS.orig.id;
   const libIds=new Set((RS.lib||[]).map(v=>v.id));
   const all=RS.yt.filter(x=>!libIds.has(x.id));
-  const vis=all.filter(x=>(!RS.onlyLink||x.hasLink)&&(!RS.hideShorts||!(x.duration&&x.duration<=180)));
-  const hidden=all.length-vis.length;
+  for(const x of all) if(!x.known) x.known=knownCreator(x.channelId,x.channelTitle);
+  const vis=all.filter(x=>(!RS.onlyLink||x.hasLink)&&(!RS.hideShorts||!(x.duration&&x.duration<=180))&&(!RS.onlyKnown||x.known.rank>0));
+  // bekannte Creator nach oben, innerhalb der Gruppen bleibt die Reihenfolge von YouTube (Relevanz)
+  vis.sort((a,b)=>(b.known.rank>0)-(a.known.rank>0)||b.known.rank-a.known.rank||b.known.n-a.known.n);
+  const hidden=all.length-vis.length, nKnown=vis.filter(x=>x.known.rank>0).length;
   box.innerHTML=(RS.ytErr?`<p class="hint err">${esc(RS.ytErr)}</p>`:"")
-    +(vis.map(x=>{ const v=S.videos.get(x.id); return rsRow(x,{inLib:!!v,linked:!!v&&(v.reactsTo||[]).includes(oid),hasLink:x.hasLink}); }).join("")
+    +(vis.map((x,i)=>{ const v=S.videos.get(x.id);
+      const head=nKnown&&i===0?`<p class="rshead">Bekannte Creator (${nKnown})</p>`:nKnown&&i===nKnown?`<p class="rshead">Weitere Treffer (${vis.length-nKnown})</p>`:"";
+      return head+rsRow(x,{inLib:!!v,linked:!!v&&(v.reactsTo||[]).includes(oid),hasLink:x.hasLink,known:x.known}); }).join("")
       ||(RS.ytStarted&&!RS.ytLoading&&!RS.ytErr?'<p class="hint">Keine Treffer.</p>':""))
     +(RS.ytStarted?`<div class="cbbar" style="margin-top:8px">${RS.ytLoading?'<span class="hint">Suche auf YouTube …</span>':""}${hidden?`<span class="hint">${plur(hidden,"Treffer","Treffer")} durch Filter ausgeblendet.</span>`:""}${!RS.ytLoading&&!RS.ytDone&&RS.yt.length?'<button type="button" class="btn" data-rsyt>Weitere Treffer laden (100 Einheiten)</button>':""}</div>`:"");
   if(RS.ytStarted){ const tb=$("#rs-ytbtn"); tb.disabled=true; tb.textContent=RS.ytLoading?"Suche …":"Gesucht"; }

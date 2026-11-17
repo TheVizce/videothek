@@ -241,6 +241,10 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:4px 0}
 .rstag.new{border-color:var(--accent);color:var(--accent)}
 .rstag.known{border-color:var(--ok);color:var(--ok)}
 .rshead{font-family:var(--f-mono);font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin:10px 0 2px}
+.impform{display:flex;flex-direction:column;gap:12px;margin-top:10px}
+.rxof{font-size:12px;color:var(--ok);font-weight:600;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;margin-top:-2px}
+.rrgroup{border-top:1px solid var(--line);padding-top:6px;margin-top:6px;display:flex;flex-direction:column;gap:4px}
+.rrhits{display:flex;flex-direction:column;gap:2px;padding-left:16px;border-left:2px solid var(--line);margin-left:6px}
 .rstag.warn{border-color:var(--warn);color:var(--warn)}
 @media (max-width:600px){.rsrow{grid-template-columns:auto 72px minmax(0,1fr)}}
 .bmlink{cursor:grab;border-style:dashed;font-weight:600}
@@ -740,6 +744,7 @@ function renderRail(){
     ${(()=>{ const rv=[...S.videos.values()].filter(v=>isReaction(v)&&matches(v,"rx")); if(!rv.length&&S.f.rx==="all") return "";
       const c={all:rv.length,missing:rv.filter(v=>!(v.reactsTo||[]).length&&!v.extOrig).length,linked:rv.filter(v=>(v.reactsTo||[]).length).length,external:rv.filter(v=>v.extOrig).length};
       return optsBlock("Reactions",[["all","Alle Videos"],["missing","Ohne Original",c.missing],["linked","Mit YouTube-Original",c.linked],["external","Original nicht auf YouTube",c.external]],S.f.rx,"data-rxf"); })()}
+    <button class="btn" data-recrx style="align-self:flex-start">Empfohlene Reactions finden</button>
     <div class="facet"><h3>Creator${S.f.creator.size?`<button data-clear="creator">zurücksetzen</button>`:""}</h3>
       ${allCreators().length>8?`<input class="small-in" id="creatorQ" placeholder="Creator suchen" value="${esc(S.creatorQ)}">`:""}
       <div class="opts">${showC.map(c=>`<button class="opt ${S.f.creator.has(c)?"on":""}" data-f="creator" data-v="${esc(c)}"><span>${esc(creatorName(c))}</span><span class="n">${cC.get(c)||0}</span></button>`).join("")||'<span class="hint">Keine Treffer</span>'}</div></div>
@@ -1095,6 +1100,7 @@ function feedVisible({skipCh}={}){
     if(F.show==="new"&&!(Date.parse(it.published)>F.seenPrev)) return false;
     if(F.show==="fav"&&!S.channels.get(it.channelId)?.fav) return false;
     if(F.show==="notin"&&S.videos.has(it.id)) return false;
+    if(F.show==="rx"&&!feedRx(it).length) return false;
     if(S.q){ const hay=(it.title+" "+it.channelTitle).toLowerCase(); for(const w of S.q.toLowerCase().split(/\s+/).filter(Boolean)) if(!hay.includes(w)) return false; }
     return true;
   }).sort((a,b)=>Date.parse(b.published)-Date.parse(a.published));
@@ -1123,7 +1129,7 @@ async function refreshFeed(){
       do{ const j=await ytJson(`https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails&maxResults=${deep?50:15}&playlistId=${upl}&key=${key}${page?"&pageToken="+page:""}`);
         for(const it of j.items||[]){ const id=it.contentDetails?.videoId; if(!id) continue;
           const t=it.snippet?.title||""; if(t==="Private video"||t==="Deleted video") continue;
-          found.set(id,{id,channelId:c.id,channelTitle:c.title,title:t,desc:(it.snippet?.description||"").slice(0,400),published:it.contentDetails?.videoPublishedAt||it.snippet?.publishedAt}); }
+          found.set(id,{id,channelId:c.id,channelTitle:c.title,title:t,desc:(it.snippet?.description||"").slice(0,400),links:extractYtIds((it.snippet?.description||"")+" "+t).filter(x=>x!==id).slice(0,30),published:it.contentDetails?.videoPublishedAt||it.snippet?.publishedAt}); }
         page=j.nextPageToken; pages++;
       }while(deep&&page&&pages<3);
     }catch(e){ F.errors.push({channel:c.title,msg:e.msg||"Fehler"}); }
@@ -1154,18 +1160,19 @@ function renderFeedRail(){
   let chans=[...S.channels.values()].sort((a,b)=>(b.fav?1:0)-(a.fav?1:0)||(counts.get(b.id)||0)-(counts.get(a.id)||0)||a.title.localeCompare(b.title,"de"));
   if(F.chQ) chans=chans.filter(c=>c.title.toLowerCase().includes(F.chQ.toLowerCase()));
   r.innerHTML=`<div class="facet"><h3>Anzeigen</h3><div class="opts">
-      ${[["all","Alle Videos"],["fav","★ Nur Favoriten"],["new","Nur neue seit letztem Besuch"],["notin","Noch nicht in der Videothek"]].map(([k,l])=>`<button class="opt ${F.show===k?"on":""}" data-fshow="${k}"><span>${l}</span></button>`).join("")}</div>
+      ${[["all","Alle Videos"],["fav","★ Nur Favoriten"],["new","Nur neue seit letztem Besuch"],["notin","Noch nicht in der Videothek"],["rx","Reactions zur Videothek"]].map(([k,l])=>`<button class="opt ${F.show===k?"on":""}" data-fshow="${k}"><span>${l}</span></button>`).join("")}</div>
       <label class="check" style="padding:6px 8px 0"><input type="checkbox" id="feedHiddenToggle" ${F.showHidden?"checked":""}> Ausgeblendete zeigen</label></div>
     <div class="facet"><h3>Kanäle${F.ch.size?`<button data-fchclear>zurücksetzen</button>`:""}</h3>
       ${S.channels.size>8?`<input class="small-in" id="chQ" placeholder="Kanal suchen" value="${esc(F.chQ)}">`:""}
       <div class="opts">${chans.map((c,i)=>`${i>0&&chans[i-1].fav&&!c.fav?'<hr class="sep" style="margin:4px 8px">':""}<div class="optrow"><button class="opt ${F.ch.has(c.id)?"on":""}" data-fch="${c.id}" title="${esc(chRuleSummary(c))}"><span>${esc(c.title)}${chRuleSummary(c)?' <span class="hint">⚑</span>':""}</span><span class="n">${counts.get(c.id)||0}</span></button>${starBtn(c)}</div>`).join("")||'<span class="hint">Keine Treffer</span>'}</div></div>
-    <button class="btn" data-channels>Kanäle & Regeln verwalten</button>`;
+    <button class="btn" data-channels>Kanäle & Regeln verwalten</button>
+    <button class="btn" data-recrx>Empfohlene Reactions finden</button>`;
   const q=$("#chQ"); if(q&&F._focus){ q.focus(); q.setSelectionRange(q.value.length,q.value.length); }
 }
 function renderFeedActive(){
   const list=feedVisible(); const chips=[];
   for(const id of F.ch){ const c=S.channels.get(id); if(c) chips.push(`<span class="chip">${esc(c.title)}<button data-fch="${id}" aria-label="Filter entfernen">✕</button></span>`); }
-  if(F.show!=="all") chips.push(`<span class="chip">${{new:"Nur neue",notin:"Nicht in Videothek",fav:"★ Favoriten"}[F.show]}<button data-fshow="all" aria-label="Filter entfernen">✕</button></span>`);
+  if(F.show!=="all") chips.push(`<span class="chip">${{new:"Nur neue",notin:"Nicht in Videothek",fav:"★ Favoriten",rx:"Reactions zur Videothek"}[F.show]}<button data-fshow="all" aria-label="Filter entfernen">✕</button></span>`);
   $("#active").innerHTML=`<span class="hint mono">${plur(list.length,"Video","Videos")}</span>${chips.join("")}`;
 }
 function feedCardHTML(it){
@@ -1173,8 +1180,9 @@ function feedCardHTML(it){
   const cv={id:it.id,title:it.title,creator:it.channelTitle,duration:it.duration};
   return `<div class="card fcard ${hidden?"gone":""}">
     <button class="fopen" data-feed="${it.id}" aria-label="${esc(it.title)}">${coverHTML(cv,{badges:false}).replace(/<\/div>\s*$/,`<div class="tl">${isNew&&!inLib?'<span class="badge rx">Neu</span>':""}${inLib?'<span class="badge">✓ in Videothek</span>':""}</div><div class="badges">${it.live==="live"?'<span class="badge rx">Live</span>':""}${it.duration?`<span class="badge">${fmtDur(it.duration)}</span>`:""}</div></div>`)}</button>
+    ${(()=>{ const rx=feedRx(it); return rx.length?`<span class="rxof" title="Verlinkt ${esc(rx.map(o=>titleOf(S.videos.get(o))).join(", "))}">↳ Reaction auf ${esc(rxTargetLabel(rx))}</span>`:""; })()}
     <div class="meta"><span class="t">${esc(it.title)}</span><span class="s">${S.channels.get(it.channelId)?.fav?'<span class="favmark" title="Favorit">★</span> ':""}${esc(it.channelTitle)} · ${relTime(it.published)}</span></div>
-    <div class="factions">${inLib?`<button class="btn" data-open="${it.id}">Öffnen</button>`:`<button class="btn" data-fadd="${it.id}">+ Videothek</button>`}
+    <div class="factions">${inLib?`<button class="btn" data-open="${it.id}">Öffnen</button>${feedRx(it).length?`<button class="btn" data-flink="${it.id}">Verknüpfen</button>`:""}`:feedRx(it).length?`<button class="btn" data-faddrx="${it.id}">+ als Reaction</button>`:`<button class="btn" data-fadd="${it.id}">+ Videothek</button>`}
       <button class="btn ghost" data-fhide="${it.id}">${hidden?"Einblenden":"Ausblenden"}</button></div>
   </div>`;
 }
@@ -1197,14 +1205,17 @@ function renderFeedGrid(){
   if(list.length>400) html+=`<p class="hint">Die ältesten ${list.length-400} Videos sind ausgeblendet. Filtere nach Kanal, um sie zu sehen.</p>`;
   g.innerHTML=html;
 }
-function feedAdd(id,{edit}={}){
+// Videos der Videothek, die ein Abo-Video verlinkt (noch nicht verknüpft)
+function feedRx(it){ const v=S.videos.get(it.id); return rxTargets(it.links,it.channelId,it.id).filter(o=>!(v?.reactsTo||[]).includes(o)); }
+function feedAdd(id,{edit,rx}={}){
   const it=F.items.find(x=>x.id===id); if(!it) return;
   if(!S.videos.has(id)){
     const c=S.channels.get(it.channelId)||{};
     const v=newVideo(id,{title:it.title,creator:it.channelTitle,channelId:it.channelId,uploadDate:(it.published||"").slice(0,10),duration:it.duration||null,status:"Verfügbar"},{genre:c.genre,format:c.format,tags:c.tags||[]});
+    if(rx){ const t=feedRx(it); if(t.length) applyRxLink(v,t); }
     S.videos.set(id,v); persist();
   }
-  if(edit) openEditor(id); else { render(); toast("Als ungesehen in die Videothek übernommen"); }
+  if(edit) openEditor(id); else { render(); toast(rx?"Als Reaction übernommen und verknüpft":"Als ungesehen in die Videothek übernommen"); }
 }
 function feedHide(id){
   if(S.feedHidden[id]) delete S.feedHidden[id]; else S.feedHidden[id]=Date.now();
@@ -1217,7 +1228,8 @@ function renderFeedDrawer(){
   const player=S.playing?`<iframe src="https://www.youtube-nocookie.com/embed/${it.id}?autoplay=1&rel=0" title="${esc(it.title)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`
     :`${coverHTML({id:it.id,title:it.title,creator:it.channelTitle},{badges:false})}<button class="play" data-fplay aria-label="Im Player abspielen"><span><svg width="22" height="22" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg></span></button>`;
   const rest=`<div><h3 class="dtitle">${esc(it.title)}</h3><div class="hint" style="margin-top:4px">${esc(it.channelTitle)} · ${new Date(it.published).toLocaleDateString("de-DE")}${it.duration?` · ${fmtDur(it.duration)}`:""}</div></div>
-    <div class="actions">${inLib?`<button class="btn primary" data-open="${it.id}">In der Videothek öffnen</button>`:`<button class="btn primary" data-fadd="${it.id}">+ Videothek (ungesehen)</button><button class="btn" data-faddedit="${it.id}">Übernehmen & bearbeiten</button>`}
+    ${(()=>{ const rx=feedRx(it); return rx.length?`<div class="notice"><span>Verlinkt ${rx.length===1?"ein Video":rx.length+" Videos"} deiner Videothek: ${esc(rx.map(o=>"„"+titleOf(S.videos.get(o))+"“").join(", "))}</span></div>`:""; })()}
+    <div class="actions">${inLib?`<button class="btn primary" data-open="${it.id}">In der Videothek öffnen</button>${feedRx(it).length?`<button class="btn" data-flink="${it.id}">Als Reaction verknüpfen</button>`:""}`:feedRx(it).length?`<button class="btn primary" data-faddrx="${it.id}">+ als Reaction</button><button class="btn" data-fadd="${it.id}">+ ohne Verknüpfung</button><button class="btn" data-faddedit="${it.id}">Übernehmen & bearbeiten</button>`:`<button class="btn primary" data-fadd="${it.id}">+ Videothek (ungesehen)</button><button class="btn" data-faddedit="${it.id}">Übernehmen & bearbeiten</button>`}
       <button class="btn ghost" data-fhide="${it.id}">${S.feedHidden[it.id]?"Wieder einblenden":"Ausblenden"}</button>
       <a class="btn ghost" href="${ytUrl(it.id)}" target="_blank" rel="noopener">YouTube ↗</a>
       <button class="btn ghost" data-cbrowse="${it.channelId}">Alle Videos des Kanals</button>
@@ -1906,6 +1918,133 @@ function rsApply(){
   finishImport(r,{after:()=>{ render(); openDrawer(oid); },msg:[r.added?`${plur(r.added,"Reaction","Reactions")} hinzugefügt`:"",linked?`${linked} verknüpft`:"",r.sid&&!r.added&&!linked?"Reihe aktualisiert":""].filter(Boolean).join(", ")||"Nichts geändert"});
 }
 
+/* ---------- Empfohlene Reactions: verlinkte Videos der Videothek in Uploads bekannter Creator ---------- */
+// Welche Videos der Videothek ein Upload verlinkt. Links auf Videos desselben Kanals zählen nicht (meist eigene frühere Teile).
+function rxTargets(links,channelId,selfId){
+  return (links||[]).filter(id=>id!==selfId&&S.videos.has(id)&&(!channelId||S.videos.get(id).channelId!==channelId));
+}
+function rxTargetLabel(ids){ const v=S.videos.get(ids[0]); return v?`„${titleOf(v)}“${ids.length>1?` +${ids.length-1}`:""}`:""; }
+// Neue Reaction verknüpfen; leeres Format/Genre vom Reaction-Format bzw. Original, Tags des Originals ergänzen
+function applyRxLink(v,ids,{tags=true}={}){
+  v.reactsTo=[...new Set([...(v.reactsTo||[]),...ids])];
+  const o=S.videos.get(ids[0]);
+  if(!v.format){ const rf=rxFormatName(); if(rf) v.format=rf; }
+  if(!v.genre&&o?.genre) v.genre=o.genre;
+  if(tags&&o?.tags?.length) v.tags=[...new Set([...(v.tags||[]),...o.tags])];
+  return v;
+}
+function knownChannels(){ // Abos + Kanäle mit Videos in der Videothek
+  const m=new Map();
+  for(const c of S.channels.values()) m.set(c.id,{id:c.id,title:c.title,abo:true,fav:!!c.fav,n:0});
+  for(const v of S.videos.values()) if(v.channelId){ const e=m.get(v.channelId)||{id:v.channelId,title:v.creator||v.channelId,abo:false,fav:false,n:0}; e.n++; if(!e.abo&&v.creator) e.title=v.creator; m.set(v.channelId,e); }
+  return [...m.values()];
+}
+let RR=null;
+function openRecReactions(){
+  S.openId=null; S.openSeries=null; S.openFeed=null; S.playing=false;
+  const ch=knownChannels(), abos=ch.filter(c=>c.abo).length, lib=ch.filter(c=>!c.abo).length;
+  RR={running:false,stop:false,hits:new Map(),scanned:0,total:0,sel:new Set(),errors:[],hideShorts:false,done:false};
+  $("#layer").innerHTML=`<div class="scrim"></div><div class="modal" data-modalbg><form class="sheet" id="rrf" style="width:min(900px,100%)" novalidate>
+    <div class="sheet-head"><h2>Empfohlene Reactions</h2><button type="button" class="btn ghost" data-close aria-label="Schließen">✕</button></div>
+    <div class="sheet-body">
+      <p class="hint" style="margin:0">Durchsucht die neuesten Uploads deiner bekannten Creator nach Videos, die ein Video deiner Videothek in der Beschreibung verlinken. Links auf Videos desselben Kanals zählen nicht.</p>
+      <div class="cbbar">
+        <label class="check" style="padding:0"><input type="checkbox" id="rr-abo" ${abos?"checked":"disabled"}> Deine Abos (${abos})</label>
+        <label class="check" style="padding:0"><input type="checkbox" id="rr-lib" ${lib?"checked":"disabled"}> Kanäle mit Videos in deiner Videothek (${lib})</label>
+        <label class="sort" style="color:inherit">Je Kanal <select id="rr-depth" class="small-in" style="margin:0;width:auto"><option value="1">letzte 50 Uploads</option><option value="3">letzte 150 Uploads</option><option value="10">letzte 500 Uploads</option></select></label>
+      </div>
+      <div class="cbbar"><button type="button" class="btn primary" data-rrgo ${S.cfg.ytKey?"":"disabled"}>Durchsuchen</button><span class="hint" id="rr-cost"></span></div>
+      ${S.cfg.ytKey?"":'<p class="hint err" style="margin:0">Dafür brauchst du den YouTube-API-Schlüssel (Einstellungen).</p>'}
+      <div id="rr-status" class="hint"></div>
+      <div id="rr-opts" class="cbbar" hidden><label class="check" style="padding:0"><input type="checkbox" id="rr-shorts"> Shorts ausblenden</label>
+        <span class="actions" style="gap:4px;margin-left:auto"><button type="button" class="btn ghost" style="padding:2px 8px;font-size:12px" data-rrsel="all">Alle auswählen</button><button type="button" class="btn ghost" style="padding:2px 8px;font-size:12px" data-rrsel="none">Auswahl aufheben</button></span></div>
+      <div id="rr-list"></div>
+      <section id="rr-new" hidden><h3>Für die übernommenen Reactions</h3>
+        ${importFormHTML("rr",{def:{format:rxFormatName()}})}
+        <p class="hint" style="margin:0">Leere Felder übernimmt jede Reaction von ihrem Original (Genre), Tags des Originals werden ergänzt. Bereits vorhandene Videos werden nur verknüpft.</p></section>
+    </div>
+    <div class="sheet-foot"><span class="hint" id="rr-count"></span><div class="actions"><button type="button" class="btn ghost" data-close>Schließen</button><button type="submit" class="btn primary" id="rr-go" disabled>Übernehmen</button></div></div>
+  </form></div>`;
+  importFormInit("rr");
+  const est=()=>{ const n=rrChannels().length, d=+$("#rr-depth").value; $("#rr-cost").textContent=`${plur(n,"Kanal","Kanäle")} · höchstens etwa ${(n*d+Math.ceil(n*d*2/50)).toLocaleString("de-DE")} Einheiten deines Tageskontingents (10.000)`; };
+  $("#rrf").addEventListener("change",e=>{ const t=e.target;
+    if(["rr-abo","rr-lib","rr-depth"].includes(t.id)) est();
+    if(t.id==="rr-shorts"){ RR.hideShorts=t.checked; rrRender(); }
+    if(t.dataset.rrpick){ t.checked?RR.sel.add(t.dataset.rrpick):RR.sel.delete(t.dataset.rrpick); rrCount(); } });
+  $("#rrf").addEventListener("submit",e=>{ e.preventDefault(); rrApply(); });
+  est();
+}
+function rrChannels(){ const a=$("#rr-abo")?.checked, l=$("#rr-lib")?.checked; return knownChannels().filter(c=>(c.abo&&a)||(!c.abo&&l)); }
+async function rrScan(){
+  if(RR.running) return;
+  const chans=rrChannels(); if(!chans.length) return;
+  const depth=+$("#rr-depth").value, key=encodeURIComponent(S.cfg.ytKey);
+  Object.assign(RR,{running:true,stop:false,hits:new Map(),scanned:0,total:chans.length,sel:new Set(),errors:[],done:false});
+  const btn=$("[data-rrgo]"); btn.textContent="Anhalten"; rrRender();
+  const queue=[...chans];
+  const one=async c=>{
+    let page="", pages=0;
+    try{ do{ const j=await ytJson(`https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails&maxResults=50&playlistId=UU${c.id.slice(2)}&key=${key}${page?"&pageToken="+page:""}`);
+        for(const it of j.items||[]){ const id=it.contentDetails?.videoId, t=it.snippet?.title||""; if(!id||t==="Private video"||t==="Deleted video") continue;
+          const targets=rxTargets(extractYtIds((it.snippet?.description||"")+" "+t),c.id,id)
+            .filter(o=>!((S.videos.get(id)?.reactsTo||[]).includes(o)));
+          if(targets.length) RR.hits.set(id,{id,title:t,channelId:c.id,channelTitle:c.title,published:it.contentDetails?.videoPublishedAt||it.snippet?.publishedAt||"",targets,known:{rank:c.fav?3:c.abo?2:1,n:c.n,fav:c.fav,abo:c.abo}}); }
+        page=j.nextPageToken; pages++;
+      }while(page&&pages<depth&&!RR.stop); }
+    catch(e){ if(!/404|nicht gefunden|playlistNotFound/i.test(e.msg||"")) RR.errors.push(`${c.title}: ${e.msg||"Fehler"}`); }
+    RR.scanned++; rrStatus();
+  };
+  await Promise.all(Array.from({length:Math.min(4,queue.length)},async()=>{ while(queue.length&&!RR.stop) await one(queue.shift()); }));
+  // Dauer der Treffer nachladen (für den Shorts-Filter und die Übernahme)
+  const ids=[...RR.hits.keys()];
+  try{ for(let i=0;i<ids.length;i+=50){ const d=await ytJson(`https://www.googleapis.com/youtube/v3/videos?part=contentDetails&id=${ids.slice(i,i+50).join(",")}&key=${key}`);
+      for(const v of d.items||[]){ const h=RR.hits.get(v.id); if(h) h.duration=isoDur(v.contentDetails?.duration); } } }catch(e){}
+  RR.running=false; RR.done=!RR.stop; btn.textContent="Erneut durchsuchen"; rrRender();
+}
+function rrStatus(){ const el=$("#rr-status"); if(!el) return;
+  const n=RR.hits.size;
+  el.className=RR.errors.length?"hint err":"hint";
+  el.textContent=(RR.running?`Durchsuche ${RR.scanned} von ${RR.total} Kanälen … `:RR.stop?`Angehalten nach ${RR.scanned} von ${RR.total} Kanälen. `:RR.total?`${plur(RR.total,"Kanal","Kanäle")} durchsucht. `:"")
+    +(RR.total?`${plur(n,"Treffer","Treffer")}.`:"")+(RR.errors.length?` ${plur(RR.errors.length,"Kanal","Kanäle")} mit Fehler, z. B. ${RR.errors[0]}`:""); }
+function rrRender(){
+  rrStatus(); $("#rr-opts").hidden=!RR.hits.size;
+  const groups=new Map();
+  for(const h of RR.hits.values()){ if(RR.hideShorts&&h.duration&&h.duration<=180) continue; for(const o of h.targets){ if(!groups.has(o)) groups.set(o,[]); groups.get(o).push(h); } }
+  const order=[...groups].sort((a,b)=>b[1].length-a[1].length||titleOf(S.videos.get(a[0])).localeCompare(titleOf(S.videos.get(b[0])),"de"));
+  const shown=new Set();
+  $("#rr-list").innerHTML=order.map(([oid,hs])=>{ const o=S.videos.get(oid);
+    hs.sort((a,b)=>b.known.rank-a.known.rank||Date.parse(b.published)-Date.parse(a.published));
+    return `<div class="rrgroup"><p class="rshead">Reactions auf</p>${miniHTML(o)}<div class="rrhits">${hs.map(h=>{ const first=!shown.has(h.id); shown.add(h.id); const v=S.videos.get(h.id);
+      return rrRow(h,{inLib:!!v,dup:!first}); }).join("")}</div></div>`; }).join("")
+    ||(RR.done||RR.stop?'<p class="hint">Keine Reactions gefunden. Mehr Uploads je Kanal durchsuchen findet ältere.</p>':"");
+  rrCount();
+}
+function rrRow(h,{inLib,dup}){
+  const others=h.targets.length>1?`<span class="rstag">verlinkt ${h.targets.length} Videos deiner Videothek</span>`:"";
+  return `<label class="pirow rsrow"><input type="checkbox" data-rrpick="${h.id}" ${RR.sel.has(h.id)?"checked":""}>
+    ${coverHTML({id:h.id,title:h.title,creator:h.channelTitle},{badges:false})}
+    <span style="min-width:0"><b>${esc(h.title)}</b><small>${esc([h.channelTitle,h.published?new Date(h.published).toLocaleDateString("de-DE"):"",h.duration?fmtDur(h.duration):""].filter(Boolean).join(" · "))}</small>
+    <span class="rstags">${inLib?'<span class="rstag">in der Videothek: wird verknüpft</span>':'<span class="rstag new">neu: wird hinzugefügt</span>'}${knownTag(h.known)}${others}${dup?'<span class="rstag">steht auch oben</span>':""}</span></span></label>`;
+}
+function rrCount(){
+  const n=RR.sel.size, nNew=[...RR.sel].filter(id=>!S.videos.has(id)).length;
+  $("#rr-new").hidden=!n;
+  $("#rr-count").textContent=n?[nNew?plur(nNew,"neues Video","neue Videos"):"",n-nNew?`${n-nNew} zum Verknüpfen`:""].filter(Boolean).join(" · "):"";
+  const b=$("#rr-go"); b.disabled=!n; b.textContent=n?`${plur(n,"Reaction","Reactions")} übernehmen`:"Übernehmen";
+}
+function rrApply(){
+  const f=readImportForm("rr"); if(f.err){ $("#rr-count").textContent=f.err; $(f.focus).focus(); return; }
+  const now=Date.now(); let linked=0;
+  const sel=[...RR.sel].map(id=>RR.hits.get(id)).filter(Boolean);
+  for(const h of sel){ const v=S.videos.get(h.id); if(!v) continue; S.videos.set(h.id,{...applyRxLink({...v},h.targets,{tags:false}),updatedAt:now}); linked++; }
+  const fresh=sel.filter(h=>!S.videos.has(h.id)).sort((a,b)=>Date.parse(b.published)-Date.parse(a.published));
+  const byId=new Map(fresh.map(h=>[h.id,h]));
+  const items=fresh.map(h=>({id:h.id,meta:{title:h.title,creator:h.channelTitle,channelId:h.channelId,uploadDate:(h.published||"").slice(0,10),duration:h.duration||null,status:"Verfügbar"}}));
+  const r=importVideos(items,{...f,extra:v=>applyRxLink(v,byId.get(v.id).targets),seriesIds:sel.map(h=>h.id)});
+  finishImport(r,{msg:[r.added?`${plur(r.added,"Reaction","Reactions")} hinzugefügt`:"",linked?`${linked} verknüpft`:""].filter(Boolean).join(", ")||"Nichts geändert",
+    after:()=>{ S.view="videos"; lsSet("view","videos"); clearVideoFilters(); S.f.rx="linked"; S.sort="added"; $("#sort").value="added"; render(); }});
+}
+
 /* ---------- Lesezeichen: Videos von einer YouTube-Seite übernehmen ---------- */
 /* Läuft auf youtube.com. YouTube erlaubt dort kein innerHTML (Trusted Types), deshalb nur createElement/textContent. */
 function vtBookmarklet(T){
@@ -2286,6 +2425,11 @@ document.addEventListener("click",e=>{
   if(d.feed){ openFeedDrawer(d.feed); return; }
   if(d.fplay!==undefined){ S.playing=true; $(".player").innerHTML=""; renderFeedDrawer(); return; }
   if(d.fadd){ feedAdd(d.fadd); return; }
+  if(d.faddrx){ feedAdd(d.faddrx,{rx:true}); return; }
+  if(d.flink){ const it=F.items.find(x=>x.id===d.flink), v=S.videos.get(d.flink); if(it&&v){ S.videos.set(v.id,{...applyRxLink({...v},feedRx(it),{tags:false}),updatedAt:Date.now()}); persist(); render(); toast("Als Reaction verknüpft"); } return; }
+  if(d.recrx!==undefined){ openRecReactions(); return; }
+  if(d.rrgo!==undefined){ if(RR.running){ RR.stop=true; t.textContent="Halte an …"; } else rrScan(); return; }
+  if(d.rrsel){ if(d.rrsel==="none") RR.sel.clear(); else for(const h of RR.hits.values()) if(!(RR.hideShorts&&h.duration&&h.duration<=180)) RR.sel.add(h.id); rrRender(); return; }
   if(d.faddedit){ feedAdd(d.faddedit,{edit:true}); return; }
   if(d.fhide){ feedHide(d.fhide); return; }
   if(d.fshow){ F.show=d.fshow; render(); return; }
